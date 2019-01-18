@@ -2,10 +2,13 @@ import os
 import six
 import random
 import tensorflow as tf
-from semmatch.data.vocabulary import Vocabulary
+from semmatch.data import vocabulary
 from semmatch.utils.logger import logger
 from semmatch.utils.path import paths_all_exist
 from semmatch.data.data_utils import cpu_count
+from semmatch.utils import register
+from semmatch.config.init_from_params import InitFromParams
+from semmatch.utils.exception import NotFoundError
 import tqdm
 
 
@@ -28,29 +31,32 @@ class DataSplit(object):
   PREDICT = tf.estimator.ModeKeys.PREDICT
 
 
-class DataReader(object):
-    def __init__(self, name=None) -> None:
-        self.name = name or "data"
+@register.register('data')
+class DataReader(InitFromParams):
+    def __init__(self, data_path: str = None, data_name: str = None) -> None:
+        self._data_name = data_name or "data"
+        if data_path is None:
+            raise LookupError("The data path of dataset %s is not found." % self._name)
+        self._data_path = data_path
 
-    def _read(self, data_dir, mode):
+    def _read(self, mode):
         raise NotImplementedError
 
-    def get_features(self, mode, data_dir):
-        instance = next(self._read(data_dir, mode))
+    def get_features(self, mode):
+        instance = next(self._read(mode))
         feautres = instance.get_example_features()
         return feautres
 
-    def make_estimator_input_fn(self, mode, hparams, data_dir=None, force_repeat=False):
-        data_dir = data_dir or (hasattr(hparams, "data_dir") and hparams.data_dir)
-        vocab = self.get_or_create_vocab(data_dir)
-        self.generate(vocab, mode, data_dir)
-        features = self.get_features(mode, data_dir)
+    def make_estimator_input_fn(self, mode, force_repeat=False):
+        vocab = self.get_or_create_vocab()
+        self.generate(vocab, mode)
+        features = self.get_features(mode)
 
         def input_fn(params, config):
-            return self.input_fn(features, mode, hparams, params=params, config=config, data_dir=data_dir, force_repeat=force_repeat)
+            return self.input_fn(features, mode, params=params, config=config, force_repeat=force_repeat)
         return input_fn
 
-    def input_fn(self, features, mode, hparams, params, config, data_dir=None, force_repeat=False):
+    def input_fn(self, features, mode, params, config, force_repeat=False):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         num_threads = cpu_count() if is_training else 1
         ####modify by hparam##
@@ -58,7 +64,7 @@ class DataReader(object):
         batch_size = 32
         num_shards = 1
         ###################
-        dataset = self.dataset(features, data_dir, mode, num_threads=num_threads)
+        dataset = self.dataset(features, mode, num_threads=num_threads)
         if force_repeat or is_training:
             dataset = dataset.repeat()
         dataset = dataset.map(
@@ -68,14 +74,14 @@ class DataReader(object):
         dataset = dataset.prefetch(2)
         return dataset
 
-    def dataset(self, features, data_dir, mode, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
+    def dataset(self, features, mode, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
         def _parse_function(example_proto, features):
             parsed_features = tf.parse_single_example(example_proto, features)
             return parsed_features
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         shuffle_files = shuffle_files or shuffle_files is None and is_training
-        filenames = self._get_output_file_paths(data_dir, mode)
+        filenames = self._get_output_file_paths(mode)
         if is_training:
             dataset = tf.data.Dataset.from_tensor_slices(tf.constant(filenames))
             dataset.shuffle(buffer_size=len(filenames))
@@ -103,20 +109,20 @@ class DataReader(object):
             num_shards = 10
         return num_shards
 
-    def _get_output_file_paths(self, data_dir, mode):
+    def _get_output_file_paths(self, mode):
         paths = []
         num_shards = self._get_num_shards(mode)
         for i in range(num_shards):
-            filename = "%s_%s_%s_of_%s.tfrecord"%(self.name, mode, i, num_shards)
-            paths.append(os.path.join(data_dir, filename))
+            filename = "%s_%s_%s_of_%s.tfrecord"%(self._data_name, mode, i, num_shards)
+            paths.append(os.path.join(self._data_path, filename))
         return paths
 
-    def generate(self, vocab, mode, data_dir, cycle_every_n=1):
+    def generate(self, vocab, mode, cycle_every_n=1):
         logger.info("generating tfrecord files")
-        output_filenames = self._get_output_file_paths(data_dir, mode)
+        output_filenames = self._get_output_file_paths(mode)
         if paths_all_exist(output_filenames):
             logger.info("Skipping tfrecord files generating because tfrecord files exists at {}"
-                            .format(data_dir))
+                            .format(self._data_path))
             return
         tmp_filenames = [fname + ".incomplete" for fname in output_filenames]
         num_shards = len(output_filenames)
@@ -131,7 +137,7 @@ class DataReader(object):
 
         writers = [tf.python_io.TFRecordWriter(fname) for fname in tmp_filenames]
         counter, shard = 0, 0
-        for instance in tqdm.tqdm(self._read(data_dir, mode)):
+        for instance in tqdm.tqdm(self._read(mode)):
             instance.index_fields(vocab)
             counter += 1
             example = instance.to_example()
@@ -149,13 +155,13 @@ class DataReader(object):
         return output_filenames
 
 
-    def get_or_create_vocab(self, data_dir):
-        vocab_dir = os.path.join(data_dir, VOCABULARY_DIR)
+    def get_or_create_vocab(self):
+        vocab_dir = os.path.join(self._data_path, VOCABULARY_DIR)
         logger.info("get or create vocabulary from %s.", vocab_dir)
-        vocab = Vocabulary()
+        vocab = vocabulary.Vocabulary()
         if not vocab.load_from_files(vocab_dir):
-            instances = self._read(data_dir, DataSplit.TRAIN)
-            vocab = Vocabulary.init_from_instances(instances)
+            instances = self._read(DataSplit.TRAIN)
+            vocab = vocabulary.Vocabulary.init_from_instances(instances)
             vocab.save_to_files(vocab_dir)
         return vocab
 

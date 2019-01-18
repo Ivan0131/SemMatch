@@ -1,7 +1,9 @@
 from typing import List
 from semmatch.data.tokenizers import Token
+from semmatch.utils import register
 
 
+@register.register("word_filter")
 class WordFilter():
     """
     A ``WordFilter`` removes words from a token list.  Typically, this is for stopword removal,
@@ -18,6 +20,7 @@ class WordFilter():
         raise NotImplementedError
 
 
+@register.register_subclass("word_filter", "blank_word_filter")
 class BlankWordFilter(WordFilter):
     def filter_words(self, words: List[Token]) -> List[Token]:
         return words

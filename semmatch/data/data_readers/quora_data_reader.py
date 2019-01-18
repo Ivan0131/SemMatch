@@ -1,5 +1,5 @@
 import os
-from typing import Dict
+from typing import Dict, List
 import zipfile
 import tensorflow as tf
 from semmatch.data.data_readers import data_reader
@@ -7,23 +7,25 @@ from semmatch.data import data_utils
 from semmatch.data.fields import Field, TextField, LabelField
 from semmatch.data.tokenizers import WordTokenizer, Tokenizer
 from semmatch.data import Instance
-from semmatch.data.token_indexers import SingleIdTokenIndexer
+from semmatch.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
+from semmatch.utils import register
 
 
+@register.register_subclass('data', 'quora')
 class QuoraDataReader(data_reader.DataReader):
     _QQP_URL = ("https://firebasestorage.googleapis.com/v0/b/"
                 "mtl-sentence-representations.appspot.com/o/"
                 "data%2FQQP.zip?alt=media&token=700c6acf-160d-"
                 "4d89-81d1-de4191d02cb5")
 
-    def __init__(self, name="quora_data", max_length=48, tokenizer: Tokenizer = WordTokenizer(), token_indexers=None):
-        super().__init__(name=name)
+    def __init__(self, data_name: str = "quora", data_path: str = None, max_length: int = 48, tokenizer: Tokenizer = WordTokenizer(), token_indexers: List[Tokenizer] = None):
+        super().__init__(data_name=data_name, data_path=data_path)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or [SingleIdTokenIndexer(namespace='tokens')]
         self._max_length = max_length
 
-    def _read(self, data_dir: str, mode: str):
-        qqp_dir = self._maybe_download_corpora(data_dir)
+    def _read(self, mode: str):
+        qqp_dir = self._maybe_download_corpora(self._data_path)
         if mode == data_reader.DataSplit.TRAIN:
             filesplit = "train.tsv"
         else:

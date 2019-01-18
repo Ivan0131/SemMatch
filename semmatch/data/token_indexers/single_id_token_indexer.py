@@ -4,8 +4,10 @@ from semmatch.data.tokenizers import Token
 from semmatch.data import Vocabulary
 from semmatch.data.token_indexers.token_indexer import TokenIndexer
 import tensorflow as tf
+from semmatch.utils import register
 
 
+@register.register_subclass("token_indexer", "single_id")
 class SingleIdTokenIndexer(TokenIndexer):
     """
     This :class:`TokenIndexer` represents tokens as single integers.

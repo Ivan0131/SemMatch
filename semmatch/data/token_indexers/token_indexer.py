@@ -1,9 +1,12 @@
 from typing import Dict, List, TypeVar, Generic
 from semmatch.data.tokenizers.token import Token
 from semmatch.data.vocabulary import Vocabulary
+from semmatch.utils import register
+from semmatch.config.init_from_params import InitFromParams
 
 
-class TokenIndexer(object):
+@register.register("token_indexer")
+class TokenIndexer(InitFromParams):
     def __init__(self, namespace: str = 'tokens'):
         self.namespace = namespace
 

@@ -1,4 +1,3 @@
-from semmatch.data.vocabulary import Vocabulary
 from semmatch.data.fields import Field
 
 
@@ -13,7 +12,7 @@ class TextField(Field):
             for token_indexer in self._token_indexers.values():
                 token_indexer.set_max_length(self._max_length)
 
-    def index(self, vocab: Vocabulary):
+    def index(self, vocab):
         token_arrays = {}
         for token_indexer in self._token_indexers.values():
             token_indices = token_indexer.tokens_to_indices(self.tokens, vocab)

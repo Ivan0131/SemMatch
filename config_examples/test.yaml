@@ -1,0 +1,3 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: "/Users/yuyuyan/tmp"
