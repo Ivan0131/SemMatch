@@ -1,8 +1,8 @@
-##INSTALL
+## INSTALL
 ```
 pip3 install setup.py install #只支持python3.6+
 ```
-###测试
+### 测试
 ```
 cd config_examples
 cd text_matching_bilstm
@@ -11,7 +11,7 @@ python3 script.py
 ```
 
 模型接口暂时按照以下方式，之后再调整。
-##从命令行运行
+## 从命令行运行
 ```
 python3 -m semmatch.run train --config_path='./config.yaml'
 ```
@@ -51,7 +51,7 @@ hparams:
   eval_steps: 100
 ```
 
-##作为类库运行
+## 作为类库运行
 ```python
 import semmatch
 
@@ -72,7 +72,7 @@ model = semmatch.get_by_name('model', 'text_matching_bilstm')(embedding_mapping=
 train = semmatch.get_by_name('command', 'train')(data_reader=data_reader, model=model) #train model
 ```
 
-##添加自定义数据
+## 添加自定义数据
 数据的读取模块参考了AllenNLP中field，instance，token_indexer的概念。因此添加数据模块的方式也跟AllenNLP相似。下面以Quora这个数据集为例，说明如何添加数据集。
 
 ```python
@@ -142,7 +142,7 @@ class QuoraDataReader(data_reader.DataReader):
 接下来，我们的框架会自动根据`Instance`建立相应的vocabulary，并将数据保存到tfrecord文件中，并自动从这些文件中读取数据。tfrecord文件保存和读取时候的features的key的值为`field_name/vocab_namespace`。`field_name`在`_process`函数中指定，例如‘premise’，‘hypothesis’和‘label’。`vocab_namespace`在_token_indexers中指定例如在`__init__`新建`SingleIdTokenIndexer`时，我们指定了‘tokens’，没有指定的话采用默认值。不同的`vocab_namespace`会采用不同的字典。
 
 
-##添加自定义模型
+## 添加自定义模型
 下面以text matching的bilstm模型作为例子。
 
 ```python
@@ -223,7 +223,7 @@ class BiLSTM(Model):
 ```
 `@register.register_subclass`在`model`中注册了`text_matching_bilstm `。初始化函数中主要包含两个模块`EmbeddingMapping`和`Optimizer`。主要具体实现一个函数`forward`，返回一个output\_dict。output\_dict为一个字典，包含`tf.estimator.EstimatorSpec`所需要的参数，例如：loss、metrics、predictions等。`features_embedding = self._embedding_mapping.forward(features, labels, mode, params)`是通过embedding将输入数据进行编码，例如将词根据词向量进行编码，对标签根据one hot进行编码。
 
-##to do list
+## to do list
 * Tokenizer扩充，目前只是正则匹配的英文分词，可以添加已经分好词的输入数据（由空格分开）的分词处理，nltk，jieba分词，中英文分词的处理
 * token_indexer扩充，例如字符，NER，POS tag
 * Tokenizer里面包含了文本的一些数据处理，目前都比较简单，除了分词之外，没有做其它处理，添加其它文本的预处理
