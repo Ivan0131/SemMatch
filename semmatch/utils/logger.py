@@ -1,2 +1,3 @@
-import logging
-logger = logging.getLogger()  # pylint: disable=invalid-name
+from tensorflow import logging
+logging.set_verbosity(logging.DEBUG)
+logger = logging  # pylint: disable=invalid-name

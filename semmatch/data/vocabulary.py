@@ -2,6 +2,7 @@ import os
 from typing import Dict
 from semmatch.data import instance
 from semmatch.utils.logger import logger
+from semmatch.utils.exception import ConfigureError
 import collections
 import tqdm
 import simplejson as json
@@ -134,18 +135,33 @@ class Vocabulary(object):
         else:
             return self._token_to_index[namespace][token]
 
-    def _extend(self, counter=None):
+    def _extend(self, counter=None, min_count=5):
         counter = counter or {}
         for namespace in counter:
             for token in counter[namespace].keys():
-                self.add_token_to_vocab(token, namespace)
+                if counter[namespace][token] > min_count:
+                    self.add_token_to_vocab(token, namespace)
+
+    def get_vocab_size(self, namespace='tokens'):
+        if namespace not in self._token_to_index: raise ConfigureError("namespace %s not in vocabulary."%namespace)
+        return len(self._token_to_index[namespace])
+
+    def get_vocab_tokens(self, namespace='tokens'):
+        if namespace not in self._token_to_index: raise ConfigureError("namespace %s not in vocabulary."%namespace)
+        return set(self._token_to_index[namespace].keys())
+
+    def get_vocab_index_to_token(self, namespace='tokens'):
+        if namespace not in self._token_to_index: raise ConfigureError("namespace %s not in vocabulary."%namespace)
+        return self._index_to_token[namespace]
 
     @classmethod
     def init_from_instances(cls, instances):
         logger.info("create vocab from instance")
         namespace_counter = collections.defaultdict(lambda: collections.defaultdict(int))
-        example_features = None
-        for i, instance in enumerate(tqdm.tqdm(instances)):
-            instance.count_vocab(namespace_counter)
+        try:
+            for i, instance in enumerate(tqdm.tqdm(instances)):
+                instance.count_vocab(namespace_counter)
+        except StopIteration as e:
+            logger.error("The data reader builds vocabulary error with StopIteration.")
         return cls(namespace_counter)
 

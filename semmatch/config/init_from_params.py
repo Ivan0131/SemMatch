@@ -24,7 +24,7 @@ def init_from_params(cls, params, **extras):
         subclass = subclasses[subclass_name]
 
         if not takes_arg(subclass.init_from_params, 'extras'):
-            extras = {k: v for k, v in extras.items() if takes_arg(subclass.from_params, k)}
+            extras = {k: v for k, v in extras.items() if takes_arg(subclass.init_from_params, k)}
 
         return subclass.init_from_params(params=params, **extras)
     else:

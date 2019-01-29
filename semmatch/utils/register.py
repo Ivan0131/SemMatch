@@ -95,6 +95,8 @@ def list_available(base_cls=None, name=None):
     if base_cls is None and name is not None:
         base_cls_name = base_cls if isinstance(base_cls, str) else default_name(base_cls)
         raise LookupError("Sub class %s is provided, but base class name %s is not assigned" % (name, base_cls_name))
+    if base_cls is None:
+        return list(sorted(_NAME_TO_SUBCLASSES))
     if name is None:
         if isinstance(base_cls, str):
             return list(sorted(_NAME_TO_SUBCLASSES[base_cls]))
@@ -105,6 +107,36 @@ def list_available(base_cls=None, name=None):
             return _NAME_TO_SUBCLASSES[base_cls][name]
         else:
             return _CLASS_TO_SUBCLASSES[base_cls][name]
+
+# ########api###############
+#
+#
+# def list_data_readers():
+#     return list_available('data')
+#
+#
+# def data_reader(name):
+#     return get_by_name('data', name)
+#
+#
+# def list_models():
+#     return list_available('model')
+#
+#
+# def model(name):
+#     return get_by_name('model', name)
+#
+#
+# def list_optimizers():
+#     return list_available('optimizer')
+#
+#
+# def optimizer(name):
+#     return get_by_name('optimizer', name)
+
+
+
+
 
 #
 # def register_data(name=None):

@@ -1,6 +1,8 @@
 import os
 import six
 import random
+import collections
+from typing import Dict
 import tensorflow as tf
 from semmatch.data import vocabulary
 from semmatch.utils.logger import logger
@@ -8,7 +10,7 @@ from semmatch.utils.path import paths_all_exist
 from semmatch.data.data_utils import cpu_count
 from semmatch.utils import register
 from semmatch.config.init_from_params import InitFromParams
-from semmatch.utils.exception import NotFoundError
+from semmatch.utils.exception import ConfigureError
 import tqdm
 
 
@@ -33,43 +35,73 @@ class DataSplit(object):
 
 @register.register('data')
 class DataReader(InitFromParams):
-    def __init__(self, data_path: str = None, data_name: str = None) -> None:
+    def __init__(self, data_path: str = None, data_name: str = None, batch_size: int = 32, train_filename: str = None,
+                 valid_filename: str = None, test_filename: str = None, predict_filename: str = None) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
-            raise LookupError("The data path of dataset %s is not found." % self._name)
+            raise LookupError("The data path of dataset %s is not found." % data_path)
         self._data_path = data_path
+        self._mode_2_filename = {DataSplit.TRAIN: train_filename, DataSplit.EVAL: valid_filename,
+                                 DataSplit.TEST: test_filename, DataSplit.PREDICT: predict_filename}
+        self._vocab = None
+        self._batch_size = batch_size
+
+    def get_filename_by_mode(self, mode):
+        filename = self._mode_2_filename.get(mode, None)
+        return filename
 
     def _read(self, mode):
         raise NotImplementedError
 
+    def read(self, mode):
+        try:
+            instances = self._read(mode)
+        except Exception as e:
+            logger.error(e)
+            return None
+        return instances
+
     def get_features(self, mode):
-        instance = next(self._read(mode))
-        feautres = instance.get_example_features()
+        instances = self.read(mode)
+        try:
+            instance = next(instances)
+            feautres = instance.get_example_features()
+        except StopIteration as e:
+            feautres = None
+            logger.warning("The %s part of data gain tfrecord file features error. "
+                           "If the filename of this part is not provided, please ignore this warning" % mode)
         return feautres
 
-    def make_estimator_input_fn(self, mode, force_repeat=False):
-        vocab = self.get_or_create_vocab()
-        self.generate(vocab, mode)
-        features = self.get_features(mode)
+    def get_vocab(self):
+        if self._vocab is None:
+            self._vocab = self.get_or_create_vocab()
+        return self._vocab
 
-        def input_fn(params, config):
-            return self.input_fn(features, mode, params=params, config=config, force_repeat=force_repeat)
-        return input_fn
+    def make_estimator_input_fn(self, mode, force_repeat=False):
+        if self._vocab is None:
+            self._vocab = self.get_or_create_vocab()
+        self.generate(self._vocab, mode)
+        features = self.get_features(mode)
+        if features:
+            def input_fn(params=None, config=None):
+                if params is None:
+                    params = {}
+                if config is None:
+                    config = {}
+                return self.input_fn(features, mode, params=params, config=config, force_repeat=force_repeat)
+            return input_fn
+        else:
+            return None
 
     def input_fn(self, features, mode, params, config, force_repeat=False):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         num_threads = cpu_count() if is_training else 1
-        ####modify by hparam##
-        max_length = 64
-        batch_size = 32
-        num_shards = 1
-        ###################
+        batch_size = self._batch_size
         dataset = self.dataset(features, mode, num_threads=num_threads)
         if force_repeat or is_training:
             dataset = dataset.repeat()
         dataset = dataset.map(
             cast_ints_to_int32, num_parallel_calls=num_threads)
-        batch_size = num_shards * batch_size
         dataset = dataset.batch(batch_size)
         dataset = dataset.prefetch(2)
         return dataset
@@ -137,30 +169,32 @@ class DataReader(InitFromParams):
 
         writers = [tf.python_io.TFRecordWriter(fname) for fname in tmp_filenames]
         counter, shard = 0, 0
-        for instance in tqdm.tqdm(self._read(mode)):
-            instance.index_fields(vocab)
-            counter += 1
-            example = instance.to_example()
-            writers[shard].write(example.SerializeToString())
-            if counter % cycle_every_n == 0:
-                shard = (shard + 1) % num_shards
+        try:
+            for instance in tqdm.tqdm(self.read(mode)):
+                instance.index_fields(vocab)
+                counter += 1
+                example = instance.to_example()
+                writers[shard].write(example.SerializeToString())
+                if counter % cycle_every_n == 0:
+                    shard = (shard + 1) % num_shards
+        except StopIteration as e:
+            logger.error("Generate data error for %s part in dataset. "
+                         "If the filename of this part is not provided, please ignore this warning"%mode)
 
         for writer in writers:
             writer.close()
 
         for tmp_name, final_name in zip(tmp_filenames, output_filenames):
             tf.gfile.Rename(tmp_name, final_name)
-
         logger.info("Generated %s Examples", counter)
         return output_filenames
-
 
     def get_or_create_vocab(self):
         vocab_dir = os.path.join(self._data_path, VOCABULARY_DIR)
         logger.info("get or create vocabulary from %s.", vocab_dir)
         vocab = vocabulary.Vocabulary()
         if not vocab.load_from_files(vocab_dir):
-            instances = self._read(DataSplit.TRAIN)
+            instances = self.read(DataSplit.TRAIN)
             vocab = vocabulary.Vocabulary.init_from_instances(instances)
             vocab.save_to_files(vocab_dir)
         return vocab

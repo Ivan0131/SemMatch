@@ -1,0 +1,1 @@
+from semmatch.models.text_matching.bilstm import BiLSTM

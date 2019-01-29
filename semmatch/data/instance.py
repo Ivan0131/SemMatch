@@ -39,7 +39,7 @@ class Instance(Mapping[str, field.Field]):
                 for (feature_name, feature) in field_features.items():
                     instance_features[field_name+"/"+feature_name] = feature
             else:
-                instance_features[field_name] = field_features
+                raise ValueError("The field %s to example is error." % (field_name, ))
 
         return tf.train.Example(features=tf.train.Features(feature=instance_features))
 
@@ -53,5 +53,6 @@ class Instance(Mapping[str, field.Field]):
                 for (feature_name, feature) in field_features.items():
                     instance_features[field_name + "/" + feature_name] = feature
             else:
-                instance_features[field_name] = field_features
+                raise ValueError("The field %s get example features is error." % (field_name,))
+                #instance_features[field_name] = field_features
         return instance_features

@@ -1,7 +1,8 @@
 import argparse
 from semmatch import commands, data
+from semmatch import modules
 from semmatch.utils import register
-
+from semmatch.utils.register import get_by_name, list_available
 
 _MAJOR = 0
 _MINOR = 1

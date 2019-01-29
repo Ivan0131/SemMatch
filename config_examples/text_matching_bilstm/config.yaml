@@ -1,0 +1,34 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: './data'
+  train_filename: 'train.tsv'
+  valid_filename: 'dev.tsv'
+  batch_size: 32
+
+model:
+  name: 'text_matching_bilstm'
+  num_classes: 3
+  hidden_dim: 300
+  keep_prob: 0.5
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: true
+        pretrained_file: "../data/glove.840B.300d.txt"
+      labels:
+        name: 'one_hot'
+        n_values: 3
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.00001
+run_config:
+  model_dir: './outputs'
+hparams:
+  train_steps: 100000
+  eval_steps: 100
+
+
+

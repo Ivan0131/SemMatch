@@ -19,7 +19,11 @@ class LabelField(Field):
 
     def to_example(self):
         if self._label_id is not None:
-            return tf.train.Feature(int64_list=tf.train.Int64List(value=[self._label_id]))
+            features = dict()
+            features[self._label_namespace] = tf.train.Feature(int64_list=tf.train.Int64List(value=[self._label_id]))
+            return features
 
     def get_example(self):
-        return tf.FixedLenFeature([], tf.int64)
+        features = dict()
+        features[self._label_namespace] = tf.FixedLenFeature([], tf.int64)
+        return features

@@ -9,6 +9,7 @@ from semmatch.data.tokenizers import WordTokenizer, Tokenizer
 from semmatch.data import Instance
 from semmatch.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from semmatch.utils import register
+from semmatch.utils.logger import logger
 
 
 @register.register_subclass('data', 'quora')
@@ -18,22 +19,24 @@ class QuoraDataReader(data_reader.DataReader):
                 "data%2FQQP.zip?alt=media&token=700c6acf-160d-"
                 "4d89-81d1-de4191d02cb5")
 
-    def __init__(self, data_name: str = "quora", data_path: str = None, max_length: int = 48, tokenizer: Tokenizer = WordTokenizer(), token_indexers: List[Tokenizer] = None):
-        super().__init__(data_name=data_name, data_path=data_path)
+    def __init__(self, data_name: str = "quora", data_path: str = None, batch_size: int = 32, train_filename="train.tsv",
+                 valid_filename="dev.tsv", test_filename=None, max_length: int = 48, tokenizer: Tokenizer = WordTokenizer(),
+                 token_indexers: List[Tokenizer] = None):
+        super().__init__(data_name=data_name, data_path=data_path, batch_size=batch_size, train_filename=train_filename,
+                         valid_filename=valid_filename, test_filename=test_filename)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or [SingleIdTokenIndexer(namespace='tokens')]
         self._max_length = max_length
 
     def _read(self, mode: str):
         qqp_dir = self._maybe_download_corpora(self._data_path)
-        if mode == data_reader.DataSplit.TRAIN:
-            filesplit = "train.tsv"
+        filename = self.get_filename_by_mode(mode)
+        if filename:
+            filename = os.path.join(qqp_dir, filename)
+            for example in self.example_generator(filename):
+                yield example
         else:
-            filesplit = "dev.tsv"
-
-        filename = os.path.join(qqp_dir, filesplit)
-        for example in self.example_generator(filename):
-            yield example
+            return None
 
     def _process(self, example):
         fields: Dict[str, Field] = {}
@@ -78,31 +81,3 @@ class QuoraDataReader(data_reader.DataReader):
             zip_ref.close()
 
         return qqp_finalpath
-
-
-if __name__ == "__main__":
-    train_input_fn = QuoraDataReader().make_estimator_input_fn(data_reader.DataSplit.TRAIN, {}, "/Users/yuyuyan/tmp")
-    sess = tf.InteractiveSession()
-    train_dataset = train_input_fn({}, {})
-    iterator = train_dataset.make_initializable_iterator()
-    train_dataset.make_initializable_iterator()
-    next_element = iterator.get_next()
-
-    sess.run(iterator.initializer)
-    print(sess.run(next_element))
-    # #tf.enable_eager_execution()
-    # from tensorflow.python.ops.parsing_ops import _parse_single_example_raw
-    # dr = QuoraDataReader()
-    # filenames = dr._get_output_file_paths("/Users/yuyuyan/tmp", data_reader.DataSplit.TRAIN)
-    # dataset = tf.data.TFRecordDataset(filenames)
-    # def _parse_function(example_proto):
-    #     features = {"image": tf.FixedLenFeature((), tf.string, default_value=""),
-    #                 "label": tf.FixedLenFeature((), tf.int64, default_value=0)}
-    #     parsed_features = tf.parse_single_example(example_proto, features)
-    #     return parsed_features["image"], parsed_features["label"]
-    # dataset.map(_parse_function)
-    # dataset.repeat()
-    # dataset = dataset.batch(32)
-    # iterator = dataset.make_initializable_iterator()
-    # for example in iterator.take(10):
-    #     print(example)

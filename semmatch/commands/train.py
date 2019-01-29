@@ -1,11 +1,12 @@
-import collections
+import tensorflow as tf
 from semmatch.commands.command import Command
 from semmatch.utils import register
 from semmatch.config.parameters import Parameters
-from semmatch.utils.logger import logger
-from semmatch.utils.exception import NotFoundError
+from semmatch.utils.exception import ConfigureError
 from semmatch.data.data_readers.data_reader import DataSplit, DataReader
-
+from semmatch.models import Model
+from semmatch.config.run_config import RunConfig
+from semmatch.config.hparams import HParams
 
 
 @register.register_subclass('command', 'train')
@@ -14,23 +15,58 @@ class Train(Command):
     description = 'Train a specified model on a specified dataset'
     parser = None
 
-    def __init__(self, data: DataReader):
-        self._data = data
-        self.train_input_fn = None
-        self.valid_input_fn = None
-        self.test_data_path = None
-        self.set_input_fns(data)
+    def __init__(self, data_reader=None, train_input_fn=None, valid_input_fn=None, test_input_fn=None, model=None,
+                 warm_start_from=None, hparams=HParams(), run_config: RunConfig = RunConfig()):
+        if data_reader is not None and train_input_fn is None:
+            self._train_input_fn, self._valid_input_fn, self._test_input_fn = self.make_input_fns(data_reader)
+        else:
+            self._train_input_fn = train_input_fn
+            self._valid_input_fn = valid_input_fn
+            self._test_input_fn = test_input_fn
+        if self._train_input_fn is None:
+            raise ConfigureError("The train dataset is not provided.")
+
+        if model is None:
+            raise ConfigureError("Please provide model for training.")
+        self._model_fn = model.make_estimator_model_fn()
+
+        self._estimator = tf.estimator.Estimator(
+            model_fn=self._model_fn,
+            config=run_config, params=hparams, warm_start_from=warm_start_from)
+
+        early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
+            self._estimator,
+            metric_name='loss',
+            max_steps_without_decrease=1000,
+            min_steps=100)
+
+        self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn, max_steps=hparams.train_steps,
+                                                  hooks=[early_stopping])
+        if self._valid_input_fn:
+            self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
+                                                     name=DataSplit.EVAL)
+
+        tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
+        if self._test_input_fn:
+            self._estimator.evaluate(self._test_input_fn, steps=hparams.test_steps, name=DataSplit.TEST)
+
+    @classmethod
+    def init_from_params(cls, params):
+        # ####data reader##############
+        data_reader = DataReader.init_from_params(params.pop('data'))
+        vocab = data_reader.get_vocab()
+        #####embedding mapping##########
+        model = Model.init_from_params(params.pop('model'), vocab=vocab)
+        run_config = RunConfig.init_from_params(params.pop('run_config'))
+        hparams = HParams.init_from_params(params.pop('hparams'))
+        params.assert_empty(cls.__name__)
+        cls(data_reader=data_reader, model=model, hparams=hparams, run_config=run_config)
 
     def make_input_fns(self, data: DataReader):
         train_input_fn = data.make_estimator_input_fn(DataSplit.TRAIN, force_repeat=True)
         valid_input_fn = data.make_estimator_input_fn(DataSplit.EVAL, force_repeat=True)
-        test_data_path = data.make_estimator_input_fn(DataSplit.TEST, force_repeat=True)
-        return train_input_fn, valid_input_fn, test_data_path
-
-    def set_input_fns(self, data: DataReader):
-        self.train_input_fn, self.valid_input_fn, self.test_data_path = self.make_input_fns(data)
-
-
+        test_input_fn = data.make_estimator_input_fn(DataSplit.TEST, force_repeat=True)
+        return train_input_fn, valid_input_fn, test_input_fn
 
     @classmethod
     def add_subparser(cls, parser):
