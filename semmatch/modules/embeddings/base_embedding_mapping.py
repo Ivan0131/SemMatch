@@ -18,12 +18,14 @@ class BaseEmbeddingMapping(EmbeddingMapping):
         self._encoders = encoders
 
     def forward(self, features, labels, mode, params):
+        for vocab_namespace in self._encoders:
+            self._encoders[vocab_namespace].reset_status()
         outputs = dict()
         feature_keys = features.keys()
         for feature_key in feature_keys:
-            feature_vcoab_namespace = feature_key.split("/")[1]
-            if feature_vcoab_namespace in self._encoders:
-                outputs[feature_key] = self._encoders[feature_vcoab_namespace].forward(features.get(feature_key, None),
+            feature_vocab_namespace = feature_key.split("/")[1]
+            if feature_vocab_namespace in self._encoders:
+                outputs[feature_key] = self._encoders[feature_vocab_namespace].forward(features.get(feature_key, None),
                                                                                       labels,
                                                                                       mode, params)
             else:

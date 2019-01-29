@@ -32,6 +32,9 @@ class Embedding(Encoder):
         self._trainable = trainable
         self._embeddings = None
 
+    def reset_status(self):
+        self._reuse = False
+
     def forward(self, features, labels, mode, params):
         with tf.variable_scope(self._encoder_name) as scope:
             if self._reuse:
@@ -40,7 +43,7 @@ class Embedding(Encoder):
                 if not self._trainable and not self._reuse:
                     logger.warning("No pretrained embedding is assigned. The embedding should be trainable.")
                 self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
-                                               initializer=initializers.xavier_initializer, trainable=self._trainable)
+                                               initializer=initializers.xavier_initializer(), trainable=self._trainable)
             else:
                 if self._weight.shape != (self._num_embeddings, self._embedding_dim):
                     raise ConfigureError("The parameter of embedding with shape (%s, %s), "

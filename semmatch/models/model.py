@@ -5,6 +5,7 @@ from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 
+
 @register.register("model")
 class Model(InitFromParams):
     def __init__(self, optimizer: Optimizer=AdamOptimizer(), model_name: str="model"):
@@ -28,19 +29,20 @@ class Model(InitFromParams):
                 train_op = self._optimizer.get_train_op(output_dict['loss'], params)
 
                 ##########
-                tvars = tf.trainable_variables()
-                print_ops = []
-                for op in tvars:
-                    op = tf.debugging.is_nan(tf.reduce_mean(op))
-                    print_ops.append(tf.Print(op, [op],
-                                              message='%s :' % op.name, summarize=10))
-                for key in features:
-                    features[key] = tf.debugging.is_nan(tf.reduce_mean(tf.cast(features[key], tf.float32)))
-                    print_ops.append(tf.Print(features[key], [features[key]], message='%s :' % key
-                                              ))
-                print_op = tf.group(*print_ops)
-                train_op = tf.group(print_op, train_op)
-
+                if 'debugs' in output_dict:
+                    tvars = output_dict['debugs'] #tf.trainable_variables()
+                    print_ops = []
+                    for op in tvars:
+                        op_name = op.name
+                        op = tf.debugging.is_nan(tf.reduce_mean(op))
+                        print_ops.append(tf.Print(op, [op],
+                                                  message='%s :' % op_name, summarize=10))
+                    # for key in features:
+                    #     features[key] = tf.debugging.is_nan(tf.reduce_mean(tf.cast(features[key], tf.float32)))
+                    #     print_ops.append(tf.Print(features[key], [features[key]], message='%s :' % key
+                    #                               ))
+                    print_op = tf.group(*print_ops)
+                    train_op = tf.group(print_op, train_op)
                 ########
                 output_spec = tf.estimator.EstimatorSpec(mode, loss=output_dict['loss'], train_op=train_op,
                                            predictions=output_dict.get('predictions', None),

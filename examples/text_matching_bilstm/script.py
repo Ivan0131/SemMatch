@@ -10,10 +10,10 @@ vocab = data_reader.get_vocab()
 encoders = {"tokens": semmatch.get_by_name('encoder', 'embedding')(embedding_dim=300, trainable=True,
                                                                    pretrained_file="../data/glove.840B.300d.txt",
                                                                    vocab=vocab, vocab_namespace='tokens'),
-            'labels': semmatch.get_by_name('encoder', 'one_hot')(n_values=3)} #create encoders for embedding mapping
+            'labels': semmatch.get_by_name('encoder', 'one_hot')(n_values=2)} #create encoders for embedding mapping
 embedding_mapping = semmatch.get_by_name('embedding_mapping', 'base')(encoders=encoders) #create embedding mapping
 model = semmatch.get_by_name('model', 'text_matching_bilstm')(embedding_mapping=embedding_mapping,
-                                       optimizer=optimizer, num_classes=3) #create model
+                                       optimizer=optimizer, num_classes=2) #create model
 train = semmatch.get_by_name('command', 'train')(data_reader=data_reader, model=model) #train model
 
 

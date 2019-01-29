@@ -3,11 +3,11 @@ data:
   data_path: './data'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
-  batch_size: 32
+  batch_size: 4
 
 model:
   name: 'text_matching_bilstm'
-  num_classes: 3
+  num_classes: 2
   hidden_dim: 300
   keep_prob: 0.5
   embedding_mapping:
@@ -20,10 +20,10 @@ model:
         pretrained_file: "../data/glove.840B.300d.txt"
       labels:
         name: 'one_hot'
-        n_values: 3
+        n_values: 2
   optimizer:
     name: 'adam'
-    learning_rate: 0.00001
+    learning_rate: 0.001
 run_config:
   model_dir: './outputs'
 hparams:

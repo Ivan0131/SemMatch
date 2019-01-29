@@ -72,5 +72,6 @@ class BiLSTM(Model):
                 metrics = dict()
                 metrics['accuracy'] = tf.metrics.accuracy(labels=tf.argmax(labels, -1), predictions=predictions)
                 output_dict['metrics'] = metrics
+                output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi, h, h_mlp, logits]
             self._reuse = True
             return output_dict
