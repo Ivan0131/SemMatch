@@ -66,14 +66,11 @@ class SingleIdTokenIndexer(TokenIndexer):
                 indices.append(vocabulary.get_token_index(text, self.namespace))
         return {self.namespace: indices}
 
-    def get_padding_token(self) -> int:
-        return 0
-
     def pad_token_sequence(self, tokens, max_length):
         if len(tokens) > max_length:
             tokens = tokens[:max_length]
             return tokens
-        padding_token = self.get_padding_token()
+        padding_token = self.get_padding_values()
         while len(tokens) < max_length:
             tokens.append(padding_token)
         return tokens
@@ -84,7 +81,13 @@ class SingleIdTokenIndexer(TokenIndexer):
         return tf.train.Feature(int64_list=tf.train.Int64List(value=token_indexers))
 
     def get_example(self):
-        return tf.FixedLenFeature([self._max_length], tf.int64)
+        return tf.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+
+    def get_padded_shapes(self):
+        return [None]
+
+    def get_padding_values(self):
+        return 0
 
 
 

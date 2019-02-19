@@ -2,7 +2,7 @@ from semmatch.data.fields import Field
 
 
 class TextField(Field):
-    def __init__(self, tokens, token_indexers, max_length):
+    def __init__(self, tokens, token_indexers, max_length=None):
         super().__init__()
         self.tokens = tokens
         self._token_indexers = {token_indexer.namespace:token_indexer for token_indexer in token_indexers}
@@ -39,3 +39,17 @@ class TextField(Field):
             feature = token_indexer.get_example()
             features[namespace] = feature
         return features
+
+    def get_padded_shapes(self):
+        padded_shapes = dict()
+        for (namespace, token_indexer) in self._token_indexers.items():
+            padded_shape = token_indexer.get_padded_shapes()
+            padded_shapes[namespace] = padded_shape
+        return padded_shapes
+
+    def get_padding_values(self):
+        padding_values = dict()
+        for (namespace, token_indexer) in self._token_indexers.items():
+            padding_value = token_indexer.get_padding_values()
+            padding_values[namespace] = padding_value
+        return padding_values

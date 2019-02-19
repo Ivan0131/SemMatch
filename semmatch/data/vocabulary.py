@@ -72,19 +72,19 @@ class Vocabulary(object):
 
     def load_from_files(self, directory):
         if not os.path.exists(directory):
-            logger.error("Vocabulary directory %s does not exist.", directory)
+            logger.warning("Vocabulary directory %s does not exist.", directory)
             return False
         namespaces_file = os.path.join(directory, NAMESPACE_PADDING_FILE)
         if not os.path.exists(namespaces_file):
-            logger.error("Vocabulary namespaces file %s does not exist", namespaces_file)
+            logger.warning("Vocabulary namespaces file %s does not exist", namespaces_file)
             return False
         token_to_index_file = os.path.join(directory, TOKEN_TO_INDEX_FILE)
         if not os.path.exists(token_to_index_file):
-            logger.error("Vocabulary token to index file %s does not exist", token_to_index_file)
+            logger.warning("Vocabulary token to index file %s does not exist", token_to_index_file)
             return False
         index_to_token_file = os.path.join(directory, INDEX_TO_TOKEN_FILE)
         if not os.path.exists(index_to_token_file):
-            logger.error("Vocabulary index to token file %s does not exist", index_to_token_file)
+            logger.warning("Vocabulary index to token file %s does not exist", index_to_token_file)
             return False
         with open(namespaces_file, 'r', encoding='utf-8') as json_file:
             self._non_padded_namespaces = set(json.load(json_file))

@@ -6,7 +6,7 @@ from semmatch.config.init_from_params import InitFromParams
 
 
 class RunConfig(InitFromParams, tf.estimator.RunConfig):
-    def __init__(self, model_dir: str = None, random_seed: int= None, save_summary_steps: int = 100,
+    def __init__(self, model_dir: str = None, random_seed: int = None, save_summary_steps: int = 100,
                  save_checkpoints_steps: int = None,
                  save_checkpoints_secs: int = None,
                  session_config: Dict = None, keep_checkpoint_max: int = 5,

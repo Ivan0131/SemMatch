@@ -7,10 +7,10 @@ from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch import nn
 
 
-@register.register_subclass('model', 'text_matching_bilstm')
-class BiLSTM(Model):
-    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(), hidden_dim: int = 300, keep_prob:float = 0.5,
-                 model_name: str = 'bilstm'):
+@register.register_subclass('model', 'text_matching_esim')
+class ESIM(Model):
+    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
+                 hidden_dim: int = 300, keep_prob: float = 0.5, model_name: str = 'esim'):
         super().__init__(optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
@@ -36,26 +36,47 @@ class BiLSTM(Model):
             premise_bi = tf.concat(premise_outs, axis=2)
             hypothesis_bi = tf.concat(hypothesis_outs, axis=2)
 
-            premise_bi = premise_bi * prem_mask
-            hypothesis_bi = hypothesis_bi * hyp_mask
+            ### Attention ###
+            premise_attns, hypothesis_attns = nn.bi_uni_attention(premise_bi, hypothesis_bi, prem_seq_lengths,
+                                                                  hyp_seq_lengths,
+                                                                  similarity_function=nn.dot_similarity_function)
 
+            # For making attention plots,
+            prem_diff = tf.subtract(premise_bi, premise_attns)
+            prem_mul = tf.multiply(premise_bi, premise_attns)
+            hyp_diff = tf.subtract(hypothesis_bi, hypothesis_attns)
+            hyp_mul = tf.multiply(hypothesis_bi, hypothesis_attns)
+
+            m_a = tf.concat([premise_bi, premise_attns, prem_diff, prem_mul], 2)
+            m_b = tf.concat([hypothesis_bi, hypothesis_attns, hyp_diff, hyp_mul], 2)
+
+            ### Inference Composition ###
+
+            v1_outs, c3 = nn.bi_lstm(m_a, self._hidden_dim, seq_len=prem_seq_lengths, name='v1')
+            v2_outs, c4 = nn.bi_lstm(m_b, self._hidden_dim, seq_len=hyp_seq_lengths, name='v2')
+
+            v1_bi = tf.concat(v1_outs, axis=2)
+            v2_bi = tf.concat(v2_outs, axis=2)
+
+            ### Pooling Layer ###
             eps = 1e-11
-            ### Mean pooling
-            premise_sum = tf.reduce_sum(premise_bi, 1)
-            premise_ave = tf.div(premise_sum, tf.expand_dims(tf.cast(prem_seq_lengths, tf.float32), -1)+eps)
+            v_1_sum = tf.reduce_sum(v1_bi, 1)
+            v_1_ave = tf.div(v_1_sum, tf.expand_dims(tf.cast(prem_seq_lengths, tf.float32), -1)+eps)
 
-            hypothesis_sum = tf.reduce_sum(hypothesis_bi, 1)
-            hypothesis_ave = tf.div(hypothesis_sum, tf.expand_dims(tf.cast(hyp_seq_lengths, tf.float32), -1)+eps)
+            v_2_sum = tf.reduce_sum(v2_bi, 1)
+            v_2_ave = tf.div(v_2_sum, tf.expand_dims(tf.cast(hyp_seq_lengths, tf.float32), -1)+eps)
 
-            ### Mou et al. concat layer ###
-            diff = tf.subtract(premise_ave, hypothesis_ave)
-            mul = tf.multiply(premise_ave, hypothesis_ave)
-            h = tf.concat([premise_ave, hypothesis_ave, diff, mul], 1)
+            v_1_max = tf.reduce_max(v1_bi, 1)
+            v_2_max = tf.reduce_max(v2_bi, 1)
+
+            v = tf.concat([v_1_ave, v_2_ave, v_1_max, v_2_max], 1)
 
             # MLP layer
-            h_mlp = tf.contrib.layers.fully_connected(h, self._hidden_dim, scope='fc1')
+            h_mlp = tf.contrib.layers.fully_connected(v, self._hidden_dim, activation_fn=tf.nn.tanh, scope='fc1')
+
             # Dropout applied to classifier
             h_drop = tf.layers.dropout(h_mlp, self._dropout_prob, training=is_training)
+
             # Get prediction
             logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
 

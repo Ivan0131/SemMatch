@@ -39,9 +39,12 @@ class TokenIndexer(InitFromParams):
         """
         raise NotImplementedError
 
-    def get_padding_token(self):
+    def get_padding_values(self):
         """
         When we need to add padding tokens, what should they look like?  This method returns a
         "blank" token of whatever type is returned by :func:`tokens_to_indices`.
         """
+        raise NotImplementedError
+
+    def get_padded_shapes(self):
         raise NotImplementedError

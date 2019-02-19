@@ -27,3 +27,13 @@ class LabelField(Field):
         features = dict()
         features[self._label_namespace] = tf.FixedLenFeature([], tf.int64)
         return features
+
+    def get_padded_shapes(self):
+        padded_shapes = dict()
+        padded_shapes[self._label_namespace] = []
+        return padded_shapes
+
+    def get_padding_values(self):
+        padding_values = dict()
+        padding_values[self._label_namespace] = 0
+        return padding_values

@@ -20,7 +20,7 @@ class QuoraDataReader(data_reader.DataReader):
                 "4d89-81d1-de4191d02cb5")
 
     def __init__(self, data_name: str = "quora", data_path: str = None, batch_size: int = 32, train_filename="train.tsv",
-                 valid_filename="dev.tsv", test_filename=None, max_length: int = 48, tokenizer: Tokenizer = WordTokenizer(),
+                 valid_filename="dev.tsv", test_filename=None, max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
                  token_indexers: List[Tokenizer] = None):
         super().__init__(data_name=data_name, data_path=data_path, batch_size=batch_size, train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename)
@@ -72,12 +72,12 @@ class QuoraDataReader(data_reader.DataReader):
 
     def _maybe_download_corpora(self, tmp_dir):
         qqp_filename = "QQP.zip"
-        qqp_finalpath = os.path.join(tmp_dir, "QQP")
-        if not os.path.exists(qqp_finalpath):
-            zip_filepath = data_utils.maybe_download(
-                tmp_dir, qqp_filename, self._QQP_URL)
-            zip_ref = zipfile.ZipFile(zip_filepath, "r")
-            zip_ref.extractall(tmp_dir)
-            zip_ref.close()
-
+        qqp_finaldir = tmp_dir
+        if not os.path.exists(qqp_finaldir):
+            tf.gfile.MakeDirs(qqp_finaldir)
+        zip_filepath = os.path.join(qqp_finaldir, qqp_filename)
+        if not os.path.exists(zip_filepath):
+            data_utils.maybe_download(zip_filepath, self._QQP_URL)
+        data_utils.unzip(zip_filepath, qqp_finaldir)
+        qqp_finalpath = os.path.join(qqp_finaldir, os.path.splitext(qqp_filename)[0])
         return qqp_finalpath

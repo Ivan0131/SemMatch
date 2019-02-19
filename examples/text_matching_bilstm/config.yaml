@@ -1,6 +1,6 @@
 data:
   name: "quora" # or quora_data_reader
-  data_path: './data'
+  data_path: './data/quora'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 4
@@ -24,6 +24,7 @@ model:
   optimizer:
     name: 'adam'
     learning_rate: 0.001
+    warmup_proportion: 0.1
 run_config:
   model_dir: './outputs'
 hparams:

@@ -23,7 +23,6 @@ class Embedding(Encoder):
         self._embedding_dim = embedding_dim
         self._projection_dim = projection_dim
         self._dropout_prob = 1-keep_prob
-        self._reuse = False
         if pretrained_file:
             weight = _read_pretrained_embeddings(pretrained_file, embedding_dim, vocab, vocab_namespace)
         else:
@@ -32,16 +31,12 @@ class Embedding(Encoder):
         self._trainable = trainable
         self._embeddings = None
 
-    def reset_status(self):
-        self._reuse = False
-
     def forward(self, features, labels, mode, params):
-        with tf.variable_scope(self._encoder_name) as scope:
-            if self._reuse:
-                scope.reuse_variables()
-            if self._weight is None or self._reuse:
-                if not self._trainable and not self._reuse:
+        with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+            if self._weight is None:
+                if not self._trainable:
                     logger.warning("No pretrained embedding is assigned. The embedding should be trainable.")
+                logger.debug("loading random embedding.")
                 self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
                                                initializer=initializers.xavier_initializer(), trainable=self._trainable)
             else:
@@ -49,6 +44,7 @@ class Embedding(Encoder):
                     raise ConfigureError("The parameter of embedding with shape (%s, %s), "
                                          "but the pretrained embedding with shape %s."
                                          %(self._num_embeddings, self._embedding_dim, self._weight.shape))
+                logger.debug("loading pretrained embedding with trainable %s." % self._trainable)
                 self._embeddings = tf.get_variable("embedding_weight",
                                                initializer=self._weight, trainable=self._trainable)
                     # tf.Variable(self._weight, trainable=self._trainable, name='embedding_weight')
@@ -57,7 +53,6 @@ class Embedding(Encoder):
             emb_drop = tf.layers.dropout(emb, self._dropout_prob, training=is_training)
             if self._projection_dim:
                 emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False, kernel_initializer=initializers.xavier_initializer())
-            self._reuse = True
             return emb_drop
 
     @classmethod

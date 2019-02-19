@@ -34,13 +34,10 @@ class Model(InitFromParams):
                     print_ops = []
                     for op in tvars:
                         op_name = op.name
-                        op = tf.debugging.is_nan(tf.reduce_mean(op))
+                        #op = tf.debugging.is_nan(tf.reduce_mean(op))
                         print_ops.append(tf.Print(op, [op],
                                                   message='%s :' % op_name, summarize=10))
-                    # for key in features:
-                    #     features[key] = tf.debugging.is_nan(tf.reduce_mean(tf.cast(features[key], tf.float32)))
-                    #     print_ops.append(tf.Print(features[key], [features[key]], message='%s :' % key
-                    #                               ))
+
                     print_op = tf.group(*print_ops)
                     train_op = tf.group(print_op, train_op)
                 ########

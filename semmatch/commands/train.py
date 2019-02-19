@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 from semmatch.commands.command import Command
 from semmatch.utils import register
@@ -7,6 +8,7 @@ from semmatch.data.data_readers.data_reader import DataSplit, DataReader
 from semmatch.models import Model
 from semmatch.config.run_config import RunConfig
 from semmatch.config.hparams import HParams
+from semmatch.utils.logger import logger
 
 
 @register.register_subclass('command', 'train')
@@ -15,14 +17,17 @@ class Train(Command):
     description = 'Train a specified model on a specified dataset'
     parser = None
 
-    def __init__(self, data_reader=None, train_input_fn=None, valid_input_fn=None, test_input_fn=None, model=None,
-                 warm_start_from=None, hparams=HParams(), run_config: RunConfig = RunConfig()):
+    def __init__(self, data_reader=None, train_input_fn=None, valid_input_fn=None, test_input_fn=None,
+                 serving_feature_spec=None, model=None, warm_start_from=None, hparams=HParams(),
+                 run_config: RunConfig = RunConfig()):
         if data_reader is not None and train_input_fn is None:
             self._train_input_fn, self._valid_input_fn, self._test_input_fn = self.make_input_fns(data_reader)
+            self._serving_feature_spec = data_reader.get_features(DataSplit.EVAL)
         else:
             self._train_input_fn = train_input_fn
             self._valid_input_fn = valid_input_fn
             self._test_input_fn = test_input_fn
+            self._serving_feature_spec = serving_feature_spec
         if self._train_input_fn is None:
             raise ConfigureError("The train dataset is not provided.")
 
@@ -39,14 +44,33 @@ class Train(Command):
             metric_name='loss',
             max_steps_without_decrease=1000,
             min_steps=100)
+        exporters = None
+        if self._serving_feature_spec:
+            serving_input_receiver_fn = (
+                tf.estimator.export.build_parsing_serving_input_receiver_fn(
+                    self._serving_feature_spec))
+
+            exporters = tf.estimator.BestExporter(
+                name="best_exporter",
+                serving_input_receiver_fn=serving_input_receiver_fn,
+                exports_to_keep=5)
 
         self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn, max_steps=hparams.train_steps,
                                                   hooks=[early_stopping])
         if self._valid_input_fn:
             self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
-                                                     name=DataSplit.EVAL)
+                                                     exporters=exporters)
 
         tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
+        # print(eval_results)
+        # eval_results = [eval_result[0] for eval_result in eval_results]
+        # eval_results = sorted(eval_results, key=lambda x: x['loss'])
+        # logger.info("best evaluation result:")
+        # logger.info(eval_results[0])
+        # best_checkpoint_path = os.path.join(run_config.model_dir, "model.ckpt-%s" % eval_results[0]['global_step'])
+        # if not os.path.exists(best_checkpoint_path+".index"):
+        #     best_checkpoint_path = None
+        # print(best_checkpoint_path)
         if self._test_input_fn:
             self._estimator.evaluate(self._test_input_fn, steps=hparams.test_steps, name=DataSplit.TEST)
 

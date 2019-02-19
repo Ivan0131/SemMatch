@@ -13,3 +13,9 @@ class Field(object):
 
     def get_example(self):
         raise NotImplementedError
+
+    def get_padded_shapes(self):
+        raise NotImplementedError
+
+    def get_padding_values(self):
+        raise NotImplementedError

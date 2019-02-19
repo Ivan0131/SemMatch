@@ -46,6 +46,9 @@ class DataReader(InitFromParams):
         self._vocab = None
         self._batch_size = batch_size
 
+    def get_data_name(self):
+        return self._data_name
+
     def get_filename_by_mode(self, mode):
         filename = self._mode_2_filename.get(mode, None)
         return filename
@@ -60,6 +63,19 @@ class DataReader(InitFromParams):
             logger.error(e)
             return None
         return instances
+
+    def get_padded_shapes_and_values(self, mode):
+        instances = self.read(mode)
+        try:
+            instance = next(instances)
+            padded_shapes = instance.get_padded_shapes()
+            padding_values = instance.get_padding_values()
+        except StopIteration as e:
+            padded_shapes = None
+            padding_values = None
+            logger.warning("The %s part of data gain tfrecord file features error. "
+                           "If the filename of this part is not provided, please ignore this warning" % mode)
+        return padded_shapes, padding_values
 
     def get_features(self, mode):
         instances = self.read(mode)
@@ -82,18 +98,20 @@ class DataReader(InitFromParams):
             self._vocab = self.get_or_create_vocab()
         self.generate(self._vocab, mode)
         features = self.get_features(mode)
-        if features:
+        padded_shapes, padding_values = self.get_padded_shapes_and_values(mode)
+        print(padded_shapes, padding_values)
+        if features and padded_shapes:
             def input_fn(params=None, config=None):
                 if params is None:
                     params = {}
                 if config is None:
                     config = {}
-                return self.input_fn(features, mode, params=params, config=config, force_repeat=force_repeat)
+                return self.input_fn(features, padded_shapes, padding_values, mode, params=params, config=config, force_repeat=force_repeat)
             return input_fn
         else:
             return None
 
-    def input_fn(self, features, mode, params, config, force_repeat=False):
+    def input_fn(self, features, padded_shapes, padding_values, mode, params, config, force_repeat=False):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         num_threads = cpu_count() if is_training else 1
         batch_size = self._batch_size
@@ -102,7 +120,8 @@ class DataReader(InitFromParams):
             dataset = dataset.repeat()
         dataset = dataset.map(
             cast_ints_to_int32, num_parallel_calls=num_threads)
-        dataset = dataset.batch(batch_size)
+        #dataset = dataset.batch(batch_size)
+        dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
         dataset = dataset.prefetch(2)
         return dataset
 

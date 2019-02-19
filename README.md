@@ -1,10 +1,15 @@
 ## INSTALL
 ```
-pip3 install setup.py install #只支持python3.6+
+git clone https://git.sogou-inc.com/hangzhou_research/SemMatch.git
+virtualenv sogou_semmatch
+source sogou_semmatch/bin/activate
+cd SemMatch
+pip3 install -r requirements.txt
+python3 setup.py install #只支持python3.6+
 ```
 ### 测试
 ```
-cd config_examples
+cd examples
 cd text_matching_bilstm
 python3 script.py 
 #python3 -m semmatch.run train --config_path='./config.yaml'

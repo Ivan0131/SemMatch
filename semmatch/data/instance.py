@@ -56,3 +56,31 @@ class Instance(Mapping[str, field.Field]):
                 raise ValueError("The field %s get example features is error." % (field_name,))
                 #instance_features[field_name] = field_features
         return instance_features
+
+    def get_padded_shapes(self):
+        instance_padded_shapes = {}
+        for field_name, field in self.fields.items():
+            field_padded_shapes = field.get_padded_shapes()
+            if not field_padded_shapes:
+                raise ValueError("%s index is not generated" % (field_name,))
+            if isinstance(field_padded_shapes, Dict):
+                for (feature_name, padded_shape) in field_padded_shapes.items():
+                    instance_padded_shapes[field_name + "/" + feature_name] = padded_shape
+            else:
+                raise ValueError("The field %s get padded_shapes is error." % (field_name,))
+                #instance_features[field_name] = field_features
+        return instance_padded_shapes
+
+    def get_padding_values(self):
+        instance_padding_values = {}
+        for field_name, field in self.fields.items():
+            field_padding_values = field.get_padding_values()
+            if not field_padding_values:
+                raise ValueError("%s index is not generated" % (field_name,))
+            if isinstance(field_padding_values, Dict):
+                for (feature_name, padding_values) in field_padding_values.items():
+                    instance_padding_values[field_name + "/" + feature_name] = padding_values
+            else:
+                raise ValueError("The field %s get padding values is error." % (field_name,))
+                # instance_features[field_name] = field_features
+        return instance_padding_values

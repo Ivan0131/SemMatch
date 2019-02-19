@@ -9,6 +9,3 @@ class Encoder(InitFromParams):
 
     def forward(self, features, labels, mode, params):
         raise NotImplementedError
-
-    def reset_status(self):
-        pass
