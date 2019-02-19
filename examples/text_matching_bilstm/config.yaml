@@ -3,7 +3,7 @@ data:
   data_path: './data/quora'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
-  batch_size: 4
+  batch_size: 320
 
 model:
   name: 'text_matching_bilstm'
@@ -18,6 +18,7 @@ model:
         embedding_dim: 300
         trainable: true
         pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/embedding"
       labels:
         name: 'one_hot'
         n_values: 2
@@ -28,7 +29,7 @@ model:
 run_config:
   model_dir: './outputs'
 hparams:
-  train_steps: 100000
+  train_steps: 1000000
   eval_steps: 100
 
 
