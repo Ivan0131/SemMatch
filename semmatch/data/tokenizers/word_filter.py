@@ -1,10 +1,11 @@
 from typing import List
 from semmatch.data.tokenizers import Token
 from semmatch.utils import register
+from semmatch.config.init_from_params import InitFromParams
 
 
 @register.register("word_filter")
-class WordFilter():
+class WordFilter(InitFromParams):
     """
     A ``WordFilter`` removes words from a token list.  Typically, this is for stopword removal,
     though you could feasibly use it for more domain-specific removal if you want.

@@ -138,7 +138,11 @@ class Vocabulary(object):
     def _extend(self, counter=None, min_count=5):
         counter = counter or {}
         for namespace in counter:
-            for token in counter[namespace].keys():
+            if namespace in self._non_padded_namespaces:
+                counter_keys = sorted(counter[namespace].keys())
+            else:
+                counter_keys = counter[namespace].keys()
+            for token in counter_keys:
                 if counter[namespace][token] > min_count:
                     self.add_token_to_vocab(token, namespace)
 

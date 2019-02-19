@@ -36,6 +36,9 @@ class ESIM(Model):
             premise_bi = tf.concat(premise_outs, axis=2)
             hypothesis_bi = tf.concat(hypothesis_outs, axis=2)
 
+            premise_bi *= prem_mask
+            hypothesis_bi *= hyp_mask
+
             ### Attention ###
             premise_attns, hypothesis_attns = nn.bi_uni_attention(premise_bi, hypothesis_bi, prem_seq_lengths,
                                                                   hyp_seq_lengths,
@@ -57,6 +60,9 @@ class ESIM(Model):
 
             v1_bi = tf.concat(v1_outs, axis=2)
             v2_bi = tf.concat(v2_outs, axis=2)
+
+            v1_bi = v1_bi * prem_mask
+            v2_bi = v2_bi * hyp_mask
 
             ### Pooling Layer ###
             eps = 1e-11

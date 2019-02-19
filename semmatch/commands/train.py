@@ -42,8 +42,8 @@ class Train(Command):
         early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
             self._estimator,
             metric_name='loss',
-            max_steps_without_decrease=1000,
-            min_steps=100)
+            max_steps_without_decrease=hparams.early_stopping_max_steps_without_decrease,
+            min_steps=hparams.early_stopping_min_steps)
         exporters = None
         if self._serving_feature_spec:
             serving_input_receiver_fn = (
