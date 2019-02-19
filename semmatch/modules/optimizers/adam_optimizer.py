@@ -34,7 +34,7 @@ class AdamOptimizer(Optimizer):
                     power=1.0,
                     cycle=False)
             if self._warmup_proportion and num_train_steps:
-                num_warmup_steps = num_train_steps * self._warmup_proportion
+                num_warmup_steps = int(num_train_steps * self._warmup_proportion)
                 global_steps_int = tf.cast(global_step, tf.int32)
                 warmup_steps_int = tf.constant(num_warmup_steps, dtype=tf.int32)
 

@@ -9,13 +9,15 @@ from semmatch.utils.exception import ConfigureError
 import tensorflow as tf
 from semmatch.data import Vocabulary
 import tqdm
+import pickle
+import gzip
 
 
 @register.register_subclass("encoder", 'embedding')
 class Embedding(Encoder):
     def __init__(self, embedding_dim: int, num_embeddings: int = None, projection_dim: int = None,
                  vocab: Vocabulary = None, vocab_namespace: str = None, keep_prob: float = 1.0,
-                 trainable: bool = True, pretrained_file: str = None, encoder_name="embedding"):
+                 trainable: bool = True, pretrained_file: str = None, tmp_dir=None, encoder_name="embedding"):
         super().__init__(encoder_name=encoder_name)
         if num_embeddings is None:
             num_embeddings = vocab.get_vocab_size(vocab_namespace)
@@ -24,7 +26,7 @@ class Embedding(Encoder):
         self._projection_dim = projection_dim
         self._dropout_prob = 1-keep_prob
         if pretrained_file:
-            weight = _read_pretrained_embeddings(pretrained_file, embedding_dim, vocab, vocab_namespace)
+            weight = _read_pretrained_embeddings(pretrained_file, tmp_dir, embedding_dim, vocab, vocab_namespace)
         else:
             weight = None
         self._weight = weight
@@ -64,6 +66,8 @@ class Embedding(Encoder):
         trainable = params.pop_bool("trainable", True)
         keep_prob = params.pop_float("keep_prob", 1.0)
         encoder_name = params.pop("encoder_name", "embedding")
+        tmp_dir = params.pop("tmp_dir", None)
+
         params.assert_empty(cls.__name__)
 
         return cls(num_embeddings=num_embeddings,
@@ -71,19 +75,32 @@ class Embedding(Encoder):
                    projection_dim=projection_dim,
                    keep_prob = keep_prob,
                    pretrained_file = pretrained_file, vocab=vocab, vocab_namespace=vocab_namespace,
-                   trainable=trainable, encoder_name=encoder_name)
+                   trainable=trainable, encoder_name=encoder_name, tmp_dir=tmp_dir)
 
 
-def _read_pretrained_embeddings(pretrained_file, embedding_dim, vocab, vocab_namespace):
+def _read_pretrained_embeddings(pretrained_file, tmp_dir, embedding_dim, vocab, vocab_namespace):
     if not os.path.exists(pretrained_file):
         logger.error("Pretrained embedding file is not existing")
         return None
-    file_ext = get_file_extension(pretrained_file)
-    if file_ext in ['.txt']:
-        embeddings = _read_pretrained_embeddings_text(pretrained_file, embedding_dim, vocab, vocab_namespace)
+    if tmp_dir:
+        if not os.path.exists(tmp_dir):
+            tf.gfile.MakeDirs(tmp_dir)
+        cache_embedding_file = os.path.join(tmp_dir, "embedding.pkl.gz")
     else:
-        logger.error("Do not support this embedding file type.")
-        return None
+        cache_embedding_file = None
+    if tmp_dir and os.path.exists(cache_embedding_file):
+        logger.info("loading cache embedding from %s." % cache_embedding_file)
+        with gzip.open(cache_embedding_file, 'rb') as pkl_file:
+            embeddings = pickle.load(pkl_file)
+    else:
+        file_ext = get_file_extension(pretrained_file)
+        if file_ext in ['.txt']:
+            embeddings = _read_pretrained_embeddings_text(pretrained_file, embedding_dim, vocab, vocab_namespace)
+        else:
+            logger.error("Do not support this embedding file type.")
+            return None
+        with gzip.open(cache_embedding_file, 'wb') as pkl_file:
+            pickle.dump(embeddings, pkl_file)
     return embeddings
 
 
