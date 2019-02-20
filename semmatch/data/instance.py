@@ -84,3 +84,19 @@ class Instance(Mapping[str, field.Field]):
                 raise ValueError("The field %s get padding values is error." % (field_name,))
                 # instance_features[field_name] = field_features
         return instance_padding_values
+
+    def get_raw_serving_input_receiver_features(self):
+        feature_map = {}
+        for field_name, field in self.fields.items():
+            field_features = field.get_tf_shapes_and_dtypes()
+            if not field_features:
+                raise ValueError("%s index is not generated" % (field_name,))
+            if isinstance(field_features, Dict):
+                for (feature_name, feature) in field_features.items():
+                    tensor_name = field_name + "/" + feature_name
+                    placeholder = tf.placeholder(feature['dtype'], shape=feature['shape'], name=tensor_name)
+                    feature_map[tensor_name] = placeholder
+            else:
+                raise ValueError("The field %s get raw serving input receiver features is error." % (field_name,))
+                #instance_features[field_name] = field_features
+        return feature_map

@@ -37,3 +37,8 @@ class LabelField(Field):
         padding_values = dict()
         padding_values[self._label_namespace] = 0
         return padding_values
+
+    def get_tf_shapes_and_dtypes(self):
+        shapes_and_dtypes = dict()
+        shapes_and_dtypes[self._label_namespace] = {'dtype': tf.int32, 'shape': (None)}
+        return shapes_and_dtypes

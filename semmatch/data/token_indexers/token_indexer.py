@@ -48,3 +48,6 @@ class TokenIndexer(InitFromParams):
 
     def get_padded_shapes(self):
         raise NotImplementedError
+
+    def get_tf_shapes_and_dtypes(self):
+        raise NotImplementedError

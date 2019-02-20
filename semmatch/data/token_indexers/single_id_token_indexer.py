@@ -89,5 +89,7 @@ class SingleIdTokenIndexer(TokenIndexer):
     def get_padding_values(self):
         return 0
 
+    def get_tf_shapes_and_dtypes(self):
+        return {'dtype': tf.int32, 'shape': (None, None)}
 
 

@@ -86,7 +86,7 @@ class ESIM(Model):
             # Get prediction
             logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
 
-            predictions = tf.arg_max(logits, -1)
+            predictions = tf.argmax(logits, -1)
             output_dict = {'logits': logits, 'predictions': predictions}
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:

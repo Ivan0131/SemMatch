@@ -19,3 +19,6 @@ class Field(object):
 
     def get_padding_values(self):
         raise NotImplementedError
+
+    def get_tf_shapes_and_dtypes(self):
+        raise NotImplementedError

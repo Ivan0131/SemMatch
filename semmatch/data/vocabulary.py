@@ -113,6 +113,24 @@ class Vocabulary(object):
                     return False
         return True
 
+    def get_index_token(self, token_index, namespace):
+        token_index = int(token_index)
+        if token_index in self._index_to_token[namespace]:
+            return self._index_to_token[namespace][token_index]
+        else:
+            return self._oov_token
+
+    def convert_indexes_to_tokens(self, token_indexes, namespace, ignore_padding=True):
+        if ignore_padding and namespace not in self._non_padded_namespaces:
+            new_token_indexes = []
+            for token_index in token_indexes:
+                if token_index != 0:
+                    new_token_indexes.append(token_index)
+            token_indexes = new_token_indexes
+
+        tokens = [self.get_index_token(token_index, namespace) for token_index in token_indexes]
+        return tokens
+
     def get_token_index(self, token, namespace):
         token = str(token)
         if token in self._token_to_index[namespace]:

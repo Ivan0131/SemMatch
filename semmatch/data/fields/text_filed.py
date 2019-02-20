@@ -53,3 +53,10 @@ class TextField(Field):
             padding_value = token_indexer.get_padding_values()
             padding_values[namespace] = padding_value
         return padding_values
+
+    def get_tf_shapes_and_dtypes(self):
+        shapes_and_dtypes_dict = dict()
+        for (namespace, token_indexer) in self._token_indexers.items():
+            shapes_and_dtypes = token_indexer.get_tf_shapes_and_dtypes()
+            shapes_and_dtypes_dict[namespace] = shapes_and_dtypes
+        return shapes_and_dtypes_dict

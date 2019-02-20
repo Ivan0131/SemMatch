@@ -22,7 +22,7 @@ class Train(Command):
                  run_config: RunConfig = RunConfig()):
         if data_reader is not None and train_input_fn is None:
             self._train_input_fn, self._valid_input_fn, self._test_input_fn = self.make_input_fns(data_reader)
-            self._serving_feature_spec = data_reader.get_features(DataSplit.EVAL)
+            self._serving_feature_spec = data_reader.get_raw_serving_input_receiver_features(DataSplit.EVAL)
         else:
             self._train_input_fn = train_input_fn
             self._valid_input_fn = valid_input_fn
@@ -44,16 +44,23 @@ class Train(Command):
             metric_name='loss',
             max_steps_without_decrease=hparams.early_stopping_max_steps_without_decrease,
             min_steps=hparams.early_stopping_min_steps)
+
         exporters = None
         if self._serving_feature_spec:
             serving_input_receiver_fn = (
-                tf.estimator.export.build_parsing_serving_input_receiver_fn(
+                tf.estimator.export.build_raw_serving_input_receiver_fn(
                     self._serving_feature_spec))
 
-            exporters = tf.estimator.BestExporter(
+            best_exporter = tf.estimator.BestExporter(
                 name="best_exporter",
                 serving_input_receiver_fn=serving_input_receiver_fn,
                 exports_to_keep=5)
+            latest_export = tf.estimator.LatestExporter(
+                name='latest_export',
+                serving_input_receiver_fn=serving_input_receiver_fn,
+                exports_to_keep=5
+            )
+            exporters = [best_exporter, latest_export]
 
         self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn, max_steps=hparams.train_steps,
                                                   hooks=[early_stopping])

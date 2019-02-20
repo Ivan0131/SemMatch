@@ -77,6 +77,17 @@ class DataReader(InitFromParams):
                            "If the filename of this part is not provided, please ignore this warning" % mode)
         return padded_shapes, padding_values
 
+    def get_raw_serving_input_receiver_features(self, mode):
+        instances = self.read(mode)
+        try:
+            instance = next(instances)
+            feautres = instance.get_raw_serving_input_receiver_features()
+        except StopIteration as e:
+            feautres = None
+            logger.warning("The %s part of data gain tfrecord file features error. "
+                           "If the filename of this part is not provided, please ignore this warning" % mode)
+        return feautres
+
     def get_features(self, mode):
         instances = self.read(mode)
         try:
@@ -163,9 +174,12 @@ class DataReader(InitFromParams):
     def _get_output_file_paths(self, mode):
         paths = []
         num_shards = self._get_num_shards(mode)
-        for i in range(num_shards):
-            filename = "%s_%s_%s_of_%s.tfrecord"%(self._data_name, mode, i, num_shards)
-            paths.append(os.path.join(self._data_path, filename))
+        filename = self.get_filename_by_mode(mode)
+        if filename:
+            basefilename = os.path.splitext(os.path.basename(filename))[0]
+            for i in range(num_shards):
+                filename = "%s_%s_%s_of_%s.tfrecord"%(self._data_name, basefilename, i, num_shards)
+                paths.append(os.path.join(self._data_path, filename))
         return paths
 
     def generate(self, vocab, mode, cycle_every_n=1):
