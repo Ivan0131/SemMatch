@@ -1,0 +1,9 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: './data/quora'
+  train_filename: 'train.tsv'
+  valid_filename: 'dev.tsv'
+  batch_size: 320
+
+export_dir: './outputs/export/best_exporter/1550570276'
+output_file: "eval_report.xlsx"

@@ -25,5 +25,5 @@ def length(sequence):
     """
     populated = tf.sign(tf.abs(sequence))
     length = tf.cast(tf.reduce_sum(populated, axis=1), tf.int32)
-    mask = tf.cast(tf.expand_dims(populated, -1), tf.float32)
+    mask = tf.cast(populated, tf.float32)
     return length, mask

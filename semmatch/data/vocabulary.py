@@ -8,11 +8,23 @@ import tqdm
 import simplejson as json
 import re
 DEFAULT_NON_PADDED_NAMESPACES = (".*tags", ".*labels")
-DEFAULT_PADDING_TOKEN = "@@PADDING@@"
-DEFAULT_OOV_TOKEN = "@@UNKNOWN@@"
+DEFAULT_PADDING_TOKEN = "[PAD]"
+DEFAULT_OOV_TOKEN = "[UNK]"
 NAMESPACE_PADDING_FILE = 'non_padded_namespaces.txt'
-TOKEN_TO_INDEX_FILE = 'token_to_index.txt'
-INDEX_TO_TOKEN_FILE = 'index_to_token.txt'
+VOCAB_FILE = 'vocab_%s.txt'
+
+
+def save_to_txt(items, filename):
+    with open(filename, 'w', encoding='utf-8') as txt_file:
+        for item in items:
+            txt_file.write(item+'\n')
+
+
+def load_from_txt(filename):
+    with open(filename, 'r', encoding='utf-8') as txt_file:
+        lines = txt_file.readlines()
+        items = [line.strip() for line in lines]
+        return items
 
 
 def namespace_match(patterns, name):
@@ -55,20 +67,20 @@ class Vocabulary(object):
         self._non_padded_namespaces = set(non_padded_namespaces)
         self._token_to_index = TokenToIndexDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
         self._index_to_token = IndexToTokenDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
+        self._namespace_to_path = dict()
         self._extend(counter)
 
     def save_to_files(self, directory):
         os.makedirs(directory, exist_ok=True)
         if os.listdir(directory):
             logger.warning("Vocabulary directory %s is not empty", directory)
-        with open(os.path.join(directory, NAMESPACE_PADDING_FILE), 'w', encoding='utf-8') as json_file:
-            json.dump(list(self._non_padded_namespaces), json_file)
 
-        with open(os.path.join(directory, TOKEN_TO_INDEX_FILE), "w", encoding='utf-8') as json_file:
-            json.dump(self._token_to_index, json_file)
-
-        with open(os.path.join(directory, INDEX_TO_TOKEN_FILE), 'w', encoding='utf-8') as json_file:
-            json.dump(self._index_to_token, json_file)
+        save_to_txt(self._non_padded_namespaces, os.path.join(directory, NAMESPACE_PADDING_FILE))
+        for namespace in self._token_to_index:
+            vocab_namespace = [self._index_to_token[namespace][i] for i in range(len(self._index_to_token[namespace]))]
+            vocab_namespace_file = os.path.join(directory, VOCAB_FILE % namespace)
+            self._namespace_to_path[namespace] = vocab_namespace_file
+            save_to_txt(vocab_namespace, vocab_namespace_file)
 
     def load_from_files(self, directory):
         if not os.path.exists(directory):
@@ -78,27 +90,21 @@ class Vocabulary(object):
         if not os.path.exists(namespaces_file):
             logger.warning("Vocabulary namespaces file %s does not exist", namespaces_file)
             return False
-        token_to_index_file = os.path.join(directory, TOKEN_TO_INDEX_FILE)
-        if not os.path.exists(token_to_index_file):
-            logger.warning("Vocabulary token to index file %s does not exist", token_to_index_file)
-            return False
-        index_to_token_file = os.path.join(directory, INDEX_TO_TOKEN_FILE)
-        if not os.path.exists(index_to_token_file):
-            logger.warning("Vocabulary index to token file %s does not exist", index_to_token_file)
-            return False
-        with open(namespaces_file, 'r', encoding='utf-8') as json_file:
-            self._non_padded_namespaces = set(json.load(json_file))
 
-        with open(token_to_index_file, 'r', encoding='utf-8') as json_file:
-            self._token_to_index = json.load(json_file)
+        vocab_filenames = [filename for filename in os.listdir(directory)
+                            if filename.startswith(VOCAB_FILE[:6]) and filename.endswith(VOCAB_FILE[-4:])]
+        if len(vocab_filenames) == 0:
+            logger.warning("Vocabulary file %s does not exist")
 
-        with open(index_to_token_file, 'r', encoding='utf-8') as json_file:
-            self._index_to_token = json.load(json_file)
-            for (namespace, mapping) in self._index_to_token.items():
-                new_mapping = dict()
-                for (index, token) in mapping.items():
-                    new_mapping[int(index)] = token
-                self._index_to_token[namespace] = new_mapping
+        self._non_padded_namespaces = load_from_txt(namespaces_file)
+
+        for vocab_filename in vocab_filenames:
+            namespace = vocab_filename[6:-4]
+            vocab_namespace_file = os.path.join(directory, vocab_filename)
+            self._namespace_to_path[namespace] = vocab_namespace_file
+            vocab_namespace = load_from_txt(vocab_namespace_file)
+            self._index_to_token[namespace] = dict((index, token) for index, token in enumerate(vocab_namespace))
+            self._token_to_index[namespace] = dict((token, index) for index, token in enumerate(vocab_namespace))
 
         if self.valid():
             return True
@@ -187,3 +193,7 @@ class Vocabulary(object):
             logger.error("The data reader builds vocabulary error with StopIteration.")
         return cls(namespace_counter)
 
+    def get_vocab_path(self, namespace):
+        if namespace not in self._namespace_to_path:
+            logger.error("%s vocab file does not exist." % namespace)
+        return self._namespace_to_path.get(namespace, None)

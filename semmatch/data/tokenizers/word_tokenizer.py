@@ -13,7 +13,18 @@ class WordTokenizer(Tokenizer):
         self._word_stemmer = word_stemmer
 
     def tokenize(self, text: Token) -> List[Token]:
+        text = convert_to_unicode(text)
         tokens = self._word_splitter.split_words(text)
         tokens = self._word_filter.filter_words(tokens)
         tokens = [self._word_stemmer.stem_word(token) for token in tokens]
         return tokens
+
+
+def convert_to_unicode(text):
+    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
+    if isinstance(text, str):
+        return text
+    elif isinstance(text, bytes):
+        return text.decode("utf-8", "ignore")
+    else:
+        raise ValueError("Unsupported string type: %s" % (type(text)))

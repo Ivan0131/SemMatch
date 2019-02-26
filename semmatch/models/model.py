@@ -4,13 +4,18 @@ from semmatch.utils.logger import logger
 from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
+from semmatch.modules.embeddings import EmbeddingMapping
 
 
 @register.register("model")
 class Model(InitFromParams):
-    def __init__(self, optimizer: Optimizer=AdamOptimizer(), model_name: str="model"):
+    def __init__(self, embedding_mapping: EmbeddingMapping, optimizer: Optimizer=AdamOptimizer(), model_name: str="model"):
         self._model_name = model_name
         self._optimizer = optimizer
+        self._embedding_mapping = embedding_mapping
+
+    def get_warm_start_setting(self):
+        return self._embedding_mapping.get_warm_start_setting()
 
     def forward(self, features, labels, mode, params):
         raise NotImplementedError

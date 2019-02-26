@@ -4,6 +4,11 @@ data:
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 256
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
 
 model:
   name: 'text_matching_esim'
@@ -14,11 +19,10 @@ model:
     name: 'base'
     encoders:
       tokens:
-        name: 'embedding'
-        embedding_dim: 300
-        trainable: true
-        pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/esim/embedding"
+        name: 'bert'
+        bert_config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
+        new_vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+        ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
       labels:
         name: 'one_hot'
         n_values: 2
@@ -27,7 +31,7 @@ model:
     learning_rate: 0.001
     warmup_proportion: 0.1
 run_config:
-  model_dir: './outputs/esim/'
+  model_dir: './outputs/esim_bert/'
 hparams:
   train_steps: 1000000
   eval_steps: 100

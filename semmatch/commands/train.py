@@ -18,7 +18,7 @@ class Train(Command):
     parser = None
 
     def __init__(self, data_reader=None, train_input_fn=None, valid_input_fn=None, test_input_fn=None,
-                 serving_feature_spec=None, model=None, warm_start_from=None, hparams=HParams(),
+                 serving_feature_spec=None, model=None, hparams=HParams(),
                  run_config: RunConfig = RunConfig()):
         if data_reader is not None and train_input_fn is None:
             self._train_input_fn, self._valid_input_fn, self._test_input_fn = self.make_input_fns(data_reader)
@@ -37,7 +37,7 @@ class Train(Command):
 
         self._estimator = tf.estimator.Estimator(
             model_fn=self._model_fn,
-            config=run_config, params=hparams, warm_start_from=warm_start_from)
+            config=run_config, params=hparams, warm_start_from=model.get_warm_start_setting())
 
         early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
             self._estimator,

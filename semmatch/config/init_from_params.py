@@ -7,7 +7,7 @@ from semmatch.config.config_utils import takes_arg, create_kwargs
 def init_from_params(cls, params, **extras):
     logger.info(f"instantiating class {cls} from params {getattr(params, 'params', params)} "
                 f"and extras {extras}")
-    if not params:
+    if params is None:
         return
 
     if isinstance(params, str):

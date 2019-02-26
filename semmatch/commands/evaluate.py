@@ -22,7 +22,7 @@ from semmatch.utils.saved_model import get_meta_graph_def_for_mode, get_signatur
 @register.register_subclass('command', 'eval')
 class Evaluate(Command):
     name = 'eval'
-    description = 'eval a saved model on a specified dataset'
+    description = 'evaluate a saved model on a specified dataset'
     parser = None
 
     def __init__(self, data_reader=None, eval_input_fn=None, vocab=None, export_dir=None, output_file=None):
@@ -137,7 +137,6 @@ class Evaluate(Command):
                 input_name = input_name[:input_name.find(':')]
             control_dependency_name = '^' + input_name
             if key in features:
-                features[key] = tf.cast(features[key], tf.int64)
                 check_same_dtype_and_shape(features[key], tensor_info, key)
                 input_map[input_name] = input_map[control_dependency_name] = features[key]
             elif labels is not None and key in labels:

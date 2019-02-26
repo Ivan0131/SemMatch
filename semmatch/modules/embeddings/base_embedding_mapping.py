@@ -1,4 +1,5 @@
 from typing import Dict
+import tensorflow as tf
 from semmatch.utils import register
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.embeddings.encoders import Encoder
@@ -16,6 +17,17 @@ class EmbeddingMapping(InitFromParams):
 class BaseEmbeddingMapping(EmbeddingMapping):
     def __init__(self, encoders: Dict[str, Encoder]):
         self._encoders = encoders
+
+    def get_warm_start_setting(self):
+        warm_start_settings = None
+        for (namespace, encoder) in self._encoders.items():
+            warm_start_settings_namespace = self._encoders[namespace].get_warm_start_setting()
+            if isinstance(warm_start_settings_namespace, tf.estimator.WarmStartSettings):
+                if warm_start_settings is None:
+                    warm_start_settings = warm_start_settings_namespace
+                else:
+                    logger.warning("There are two pretrained embedding, which is not supported int this toolkit now.")
+        return warm_start_settings
 
     def forward(self, features, labels, mode, params):
         logger.debug("****Embeddings****")

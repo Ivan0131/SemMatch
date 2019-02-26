@@ -9,3 +9,6 @@ class Encoder(InitFromParams):
 
     def forward(self, features, labels, mode, params):
         raise NotImplementedError
+
+    def get_warm_start_setting(self):
+        return None
