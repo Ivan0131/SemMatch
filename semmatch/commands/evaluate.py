@@ -19,6 +19,7 @@ from tensorflow.python.estimator import estimator
 from semmatch.utils.saved_model import get_meta_graph_def_for_mode, get_signature_def_for_mode, \
     check_same_dtype_and_shape
 
+
 @register.register_subclass('command', 'eval')
 class Evaluate(Command):
     name = 'eval'

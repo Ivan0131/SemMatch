@@ -12,3 +12,4 @@ class Encoder(InitFromParams):
 
     def get_warm_start_setting(self):
         return None
+

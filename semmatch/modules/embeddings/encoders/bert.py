@@ -18,8 +18,9 @@ import tensorflow as tf
 
 @register.register_subclass("encoder", 'bert')
 class Bert(Encoder):
-    def __init__(self, bert_config_file: str, new_vocab_file: str, new_vocab_size: int,
-                 num_oov_buckets: int, old_vocab_file: str = None, old_vocab_size: int = -1,
+    def __init__(self, config_file: str, new_vocab_file: str, new_vocab_size: int,
+                 num_oov_buckets: int, vocab_namespace: str, mask_namespace:str = None,
+                 old_vocab_file: str = None, old_vocab_size: int = -1,
                  ckpt_to_initialize_from: str = None,
                  use_one_hot_embeddings: bool = False, encoder_name="bert"):
         super().__init__(encoder_name=encoder_name)
@@ -29,24 +30,42 @@ class Bert(Encoder):
         self._old_vocab_file = old_vocab_file
         self._old_vocab_size = old_vocab_size
         self._ckpt_to_initialize_from = ckpt_to_initialize_from
-        self._bert_config = BertConfig.from_json_file(bert_config_file)
+        self._bert_config = BertConfig.from_json_file(config_file)
         self._use_one_hot_embeddings = use_one_hot_embeddings
+        self._vocab_namespace = vocab_namespace
+        self._mask_namespace = mask_namespace
 
     def forward(self, features, labels, mode, params):
-        with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
-            input_ids = features
-            _, input_mask = nn.length(input_ids)
-            is_training = (mode == tf.estimator.ModeKeys.TRAIN)
+        outputs = dict()
+        is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
-            model = BertModel(
-                config=self._bert_config,
-                is_training=is_training,
-                input_ids=input_ids,
-                input_mask=input_mask,
-                use_one_hot_embeddings=self._use_one_hot_embeddings)
+        for (feature_key, feature) in features.items():
+            feature_key_fields = feature_key.split("/")
+            feature_namespace = feature_key_fields[1].strip()
+            field_name = feature_key_fields[0].strip()
+            if feature_namespace == self._vocab_namespace:
+                with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+                    input_ids = feature
+                    input_mask = None
+                    if self._mask_namespace:
+                        mask_feature_key = field_name+"/"+self._mask_namespace
+                        if mask_feature_key in features:
+                            input_mask = features[field_name+"/"+self._mask_namespace]
+                        else:
+                            logger.warning("The mask namespace %s with field name %s is not in features (%s)"
+                                           % (self._mask_namespace, field_name, mask_feature_key))
+                    if input_mask is None:
+                        _, input_mask = nn.length(input_ids)
+                    model = BertModel(
+                        config=self._bert_config,
+                        is_training=is_training,
+                        input_ids=input_ids,
+                        input_mask=input_mask,
+                        use_one_hot_embeddings=self._use_one_hot_embeddings)
 
-            embedding_output = model.get_embedding_output()
-            return embedding_output
+                    embedding_output = model.get_sequence_output()
+                    outputs[feature_key] = embedding_output
+        return outputs
 
     def get_warm_start_setting(self):
         if self._ckpt_to_initialize_from is None:
@@ -79,20 +98,22 @@ class Bert(Encoder):
         return ws
 
     @classmethod
-    def init_from_params(cls, params, vocab, vocab_namespace):
-        bert_config_file = params.pop('bert_config_file', None)
-        if bert_config_file is None:
+    def init_from_params(cls, params, vocab):
+        config_file = params.pop('config_file', None)
+        if config_file is None:
             raise ConfigureError("Please provide bert config file for bert embedding.")
-        new_vocab_file = params.pop('new_vocab_file', None)
+        new_vocab_file = params.pop('vocab_file', None)
         if new_vocab_file is None:
-            logger.warning("The new vocab file is not provided. We consider the new vocab is the same as the old vocab "
-                           "acquiescently.")
+            logger.warning("The vocab file is not provided. We consider the embedding vocab is the same as the data "
+                           "vocab acquiescently.")
         ckpt_to_initialize_from = params.pop('ckpt_to_initialize_from', None)
         if ckpt_to_initialize_from is None:
             logger.warning("The bert embedding is initialize randomly.")
         num_oov_buckets = params.pop_int("num_oov_buckets", 0)
         use_one_hot_embeddings = params.pop_bool("use_one_hot_embeddings", False)
         encoder_name = params.pop("encoder_name", "bert")
+        vocab_namespace = params.pop("namespace", 'tokens')
+        mask_namespace = params.pop("mask_namespace", None)
         old_vocab_file = vocab.get_vocab_path(vocab_namespace)
         old_vocab_size = vocab.get_vocab_size(vocab_namespace)
         with open(new_vocab_file, 'r') as txt_file:
@@ -100,9 +121,10 @@ class Bert(Encoder):
 
         params.assert_empty(cls.__name__)
 
-        return cls(bert_config_file=bert_config_file, ckpt_to_initialize_from=ckpt_to_initialize_from,
+        return cls(config_file=config_file, ckpt_to_initialize_from=ckpt_to_initialize_from,
                    new_vocab_file=new_vocab_file, new_vocab_size=new_vocab_size, num_oov_buckets= num_oov_buckets,
-                   old_vocab_file=old_vocab_file, old_vocab_size=old_vocab_size,
+                   old_vocab_file=old_vocab_file, old_vocab_size=old_vocab_size, vocab_namespace=vocab_namespace,
+                   mask_namespace=mask_namespace,
                    use_one_hot_embeddings=use_one_hot_embeddings, encoder_name=encoder_name)
 
 

@@ -23,6 +23,8 @@ def length(sequence):
     length: (batch_size)
     mask: (batch_size, max_seq_length, 1)
     """
+    if sequence.get_shape().ndims == 3:
+        sequence = tf.reduce_sum(sequence, -1)
     populated = tf.sign(tf.abs(sequence))
     length = tf.cast(tf.reduce_sum(populated, axis=1), tf.int32)
     mask = tf.cast(populated, tf.float32)

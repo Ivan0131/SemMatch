@@ -17,16 +17,16 @@ import simplejson as json
 class SnliDataReader(data_reader.DataReader):
     _snli_url = 'https://nlp.stanford.edu/projects/snli/snli_1.0.zip'
 
-    def __init__(self, data_name: str = "snli", data_path: str = None, batch_size: int = 32,
+    def __init__(self, data_name: str = "snli", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
                  train_filename="snli_1.0/snli_1.0_train.jsonl",
                  valid_filename="snli_1.0/snli_1.0_dev.jsonl",
                  test_filename='snli_1.0/snli_1.0_test.jsonl',
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
-                 token_indexers: List[Tokenizer] = None):
-        super().__init__(data_name=data_name, data_path=data_path, batch_size=batch_size, train_filename=train_filename,
+                 token_indexers: Dict[str, TokenIndexer] = None):
+        super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size, train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename)
         self._tokenizer = tokenizer
-        self._token_indexers = token_indexers or [SingleIdTokenIndexer(namespace='tokens')]
+        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens')}
         self._max_length = max_length
 
     def _read(self, mode: str):

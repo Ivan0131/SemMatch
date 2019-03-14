@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 import tensorflow as tf
 from semmatch.utils import register
 from semmatch.config.init_from_params import InitFromParams
@@ -15,13 +15,13 @@ class EmbeddingMapping(InitFromParams):
 
 @register.register_subclass('embedding_mapping', 'base')
 class BaseEmbeddingMapping(EmbeddingMapping):
-    def __init__(self, encoders: Dict[str, Encoder]):
+    def __init__(self, encoders: List[Encoder]):
         self._encoders = encoders
 
     def get_warm_start_setting(self):
         warm_start_settings = None
-        for (namespace, encoder) in self._encoders.items():
-            warm_start_settings_namespace = self._encoders[namespace].get_warm_start_setting()
+        for encoder in self._encoders:
+            warm_start_settings_namespace = encoder.get_warm_start_setting()
             if isinstance(warm_start_settings_namespace, tf.estimator.WarmStartSettings):
                 if warm_start_settings is None:
                     warm_start_settings = warm_start_settings_namespace
@@ -31,18 +31,14 @@ class BaseEmbeddingMapping(EmbeddingMapping):
 
     def forward(self, features, labels, mode, params):
         logger.debug("****Embeddings****")
-        outputs = dict()
         feature_keys = features.keys()
         for feature_key in feature_keys:
             logger.debug("%s:" % feature_key)
-            feature_vocab_namespace = feature_key.split("/")[1]
-            if feature_vocab_namespace in self._encoders:
-                outputs[feature_key] = self._encoders[feature_vocab_namespace].forward(features.get(feature_key, None),
-                                                                                      labels,
-                                                                                      mode, params)
-            else:
-                logger.warning("The embedding mapping of feature %s is not assigned, so the outputs of embedding will "
-                               "not contain this feature" % feature_key)
+
+        outputs = dict()
+        for encoder in self._encoders:
+            outputs_namespace = encoder.forward(features, labels, mode, params)
+            outputs.update(outputs_namespace)
         return outputs
 
     @classmethod
@@ -50,10 +46,17 @@ class BaseEmbeddingMapping(EmbeddingMapping):
         token_embedder_params = params.pop('encoders', None)
 
         if token_embedder_params is not None:
-            token_embedders = {
-                name: Encoder.init_from_params(subparams, vocab=vocab, vocab_namespace=name)
+            token_embedders = [
+                Encoder.init_from_params(subparams, vocab=vocab)
                 for name, subparams in token_embedder_params.items()
-            }
+            ]
+            # if isinstance(token_embedder_params, Dict):
+            #
+            # else:
+            #     token_embedders = [
+            #         Encoder.init_from_params(subparams, vocab=vocab)
+            #         for subparams in token_embedder_params
+            #     ]
         else:
             raise ConfigureError("The parameters of embeddings is not provided.")
 

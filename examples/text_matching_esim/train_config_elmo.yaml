@@ -1,10 +1,15 @@
 data:
   name: "quora" # or quora_data_reader
   data_path: './data/quora'
+  tmp_path: './data/quora/elmo/'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 64
-  tmp_path: "./data/quora/glove"
+  tokenizer:
+    name: "word_tokenizer"
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
 
 model:
   name: 'text_matching_esim'
@@ -15,22 +20,19 @@ model:
     name: 'base'
     encoders:
       tokens:
-        name: 'embedding'
-        embedding_dim: 300
-        trainable: true
-        pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/esim_glove/embedding"
-        namespace: 'tokens'
+        name: 'elmo'
+        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        namespace: 'elmo_characters'
       labels:
         name: 'one_hot'
         n_values: 2
-        namespace: 'labels'
   optimizer:
     name: 'adam'
     learning_rate: 0.001
     warmup_proportion: 0.1
 run_config:
-  model_dir: './outputs/esim/'
+  model_dir: './outputs/esim_elmo/'
 hparams:
   train_steps: 1000000
   eval_steps: 100

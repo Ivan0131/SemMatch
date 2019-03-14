@@ -16,15 +16,16 @@ import simplejson as json
 
 @register.register_subclass('data', 'general')
 class GeneralDataReader(data_reader.DataReader):
-    def __init__(self, data_name: str = "general", data_path: str = None, batch_size: int = 32,
+    def __init__(self, data_name: str = "general", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
                  train_filename: str = None, valid_filename: str = None, test_filename: str = None,
                  field_mapping: Dict = None,
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
-                 token_indexers: List[Tokenizer] = None):
-        super().__init__(data_name=data_name, data_path=data_path, batch_size=batch_size, train_filename=train_filename,
+                 token_indexers: Dict[str, TokenIndexer] = None):
+        super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
+                         train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename)
         self._tokenizer = tokenizer
-        self._token_indexers = token_indexers or [SingleIdTokenIndexer(namespace='tokens')]
+        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens')}
         self._max_length = max_length
         self._field_mapping = field_mapping
 

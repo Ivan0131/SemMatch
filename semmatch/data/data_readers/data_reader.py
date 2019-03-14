@@ -35,12 +35,17 @@ class DataSplit(object):
 
 @register.register('data')
 class DataReader(InitFromParams):
-    def __init__(self, data_path: str = None, data_name: str = None, batch_size: int = 32, train_filename: str = None,
+    def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32, train_filename: str = None,
                  valid_filename: str = None, test_filename: str = None, predict_filename: str = None) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
             raise LookupError("The data path of dataset %s is not found." % data_path)
         self._data_path = data_path
+        if tmp_path is None:
+            logger.warning("The tmp path of dataset %s is not found. The tmp path is set as data path %s" % data_path)
+            self._tmp_path = data_path
+        else:
+            self._tmp_path = tmp_path
         self._mode_2_filename = {DataSplit.TRAIN: train_filename, DataSplit.EVAL: valid_filename,
                                  DataSplit.TEST: test_filename, DataSplit.PREDICT: predict_filename}
         self._vocab = None
@@ -138,7 +143,13 @@ class DataReader(InitFromParams):
 
     def dataset(self, features, mode, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
         def _parse_function(example_proto, features):
-            parsed_features = tf.parse_single_example(example_proto, features)
+            if features[1] is None:
+                parsed_features = tf.parse_single_example(example_proto, features[0])
+            else:
+                context_parsed, sequence_parsed = tf.parse_single_sequence_example(
+                    example_proto, context_features=features[1],
+                    sequence_features=features[0])
+                parsed_features = {**context_parsed, **sequence_parsed}
             return parsed_features
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
@@ -179,7 +190,7 @@ class DataReader(InitFromParams):
             basefilename = os.path.splitext(os.path.basename(filename))[0]
             for i in range(num_shards):
                 filename = "%s_%s_%s_of_%s.tfrecord"%(self._data_name, basefilename, i, num_shards)
-                paths.append(os.path.join(self._data_path, filename))
+                paths.append(os.path.join(self._tmp_path, filename))
         return paths
 
     def generate(self, vocab, mode, cycle_every_n=1):
@@ -187,7 +198,7 @@ class DataReader(InitFromParams):
         output_filenames = self._get_output_file_paths(mode)
         if paths_all_exist(output_filenames):
             logger.info("Skipping tfrecord files generating because tfrecord files exists at {}"
-                            .format(self._data_path))
+                            .format(self._tmp_path))
             return
         tmp_filenames = [fname + ".incomplete" for fname in output_filenames]
         num_shards = len(output_filenames)
@@ -223,7 +234,7 @@ class DataReader(InitFromParams):
         return output_filenames
 
     def get_or_create_vocab(self):
-        vocab_dir = os.path.join(self._data_path, VOCABULARY_DIR)
+        vocab_dir = os.path.join(self._tmp_path, VOCABULARY_DIR)
         logger.info("get or create vocabulary from %s.", vocab_dir)
         vocab = vocabulary.Vocabulary()
         if not vocab.load_from_files(vocab_dir):

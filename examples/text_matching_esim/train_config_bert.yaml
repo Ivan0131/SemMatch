@@ -1,6 +1,7 @@
 data:
   name: "quora" # or quora_data_reader
   data_path: './data/quora'
+  tmp_path: './data/quora/bert/'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 256
@@ -20,9 +21,10 @@ model:
     encoders:
       tokens:
         name: 'bert'
-        bert_config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
-        new_vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+        config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
+        vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
         ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
+        namespace: 'tokens'
       labels:
         name: 'one_hot'
         n_values: 2

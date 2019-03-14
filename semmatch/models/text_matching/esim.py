@@ -21,17 +21,35 @@ class ESIM(Model):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
         with tf.variable_scope(self._model_name):
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
-            if 'premise/tokens' not in features:
-                raise ConfigureError("The input features should contain premise with vocabulary namespace tokens.")
-            if 'hypothesis/tokens' not in features:
-                raise ConfigureError("The input features should contain hypothesis with vocabulary namespace tokens.")
-            prem_seq_lengths, prem_mask = nn.length(features['premise/tokens'])
-            hyp_seq_lengths, hyp_mask = nn.length(features['hypothesis/tokens'])
+
+            premise_tokens_ids = features.get('premise/tokens', None)
+            if premise_tokens_ids is None:
+                premise_tokens_ids = features.get('premise/elmo_characters', None)
+            hypothesis_tokens_ids = features.get('hypothesis/tokens', None)
+            if hypothesis_tokens_ids is None:
+                hypothesis_tokens_ids = features.get('hypothesis/elmo_characters', None)
+
+            if premise_tokens_ids is None:
+                raise ConfigureError("The input features should contain premise with vocabulary namespace tokens "
+                                     "or elmo_characters.")
+            if hypothesis_tokens_ids is None:
+                raise ConfigureError("The input features should contain hypothesis with vocabulary namespace tokens "
+                                     "or elmo_characters.")
+
+            prem_seq_lengths, prem_mask = nn.length(premise_tokens_ids)
+            hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
+            if features.get('premise/elmo_characters', None) is not None:
+                prem_mask = prem_mask[:, 1:-1]
+                hyp_mask = hyp_mask[:, 1:-1]
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
 
-            premise_tokens = features_embedding['premise/tokens']
-            hypothesis_tokens = features_embedding['hypothesis/tokens']
+            premise_tokens = features_embedding.get('premise/tokens', None)
+            if premise_tokens is None:
+                premise_tokens = features_embedding.get('premise/elmo_characters', None)
+            hypothesis_tokens = features_embedding.get('hypothesis/tokens', None)
+            if hypothesis_tokens is None:
+                hypothesis_tokens = features_embedding.get('hypothesis/elmo_characters', None)
 
             premise_outs, c1 = nn.bi_lstm(premise_tokens, self._hidden_dim, seq_len=prem_seq_lengths, name='premise')
             hypothesis_outs, c2 = nn.bi_lstm(hypothesis_tokens, self._hidden_dim, seq_len=hyp_seq_lengths, name='hypothesis')

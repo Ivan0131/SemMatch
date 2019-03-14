@@ -32,33 +32,40 @@ class Embedding(Encoder):
         self._weight = weight
         self._trainable = trainable
         self._embeddings = None
+        self._vocab_namespace = vocab_namespace
 
     def forward(self, features, labels, mode, params):
-        with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
-            if self._weight is None:
-                if not self._trainable:
-                    logger.warning("No pretrained embedding is assigned. The embedding should be trainable.")
-                logger.debug("loading random embedding.")
-                self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
-                                               initializer=initializers.xavier_initializer(), trainable=self._trainable)
-            else:
-                if self._weight.shape != (self._num_embeddings, self._embedding_dim):
-                    raise ConfigureError("The parameter of embedding with shape (%s, %s), "
-                                         "but the pretrained embedding with shape %s."
-                                         %(self._num_embeddings, self._embedding_dim, self._weight.shape))
-                logger.debug("loading pretrained embedding with trainable %s." % self._trainable)
-                self._embeddings = tf.get_variable("embedding_weight",
-                                               initializer=self._weight, trainable=self._trainable)
-                    # tf.Variable(self._weight, trainable=self._trainable, name='embedding_weight')
-            is_training = (mode == tf.estimator.ModeKeys.TRAIN)
-            emb = tf.nn.embedding_lookup(self._embeddings, features)
-            emb_drop = tf.layers.dropout(emb, self._dropout_prob, training=is_training)
-            if self._projection_dim:
-                emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False, kernel_initializer=initializers.xavier_initializer())
-            return emb_drop
+        outputs = dict()
+        is_training = (mode == tf.estimator.ModeKeys.TRAIN)
+
+        for (feature_key, feature) in features.items():
+            feature_namespace = feature_key.split("/")[1].strip()
+            if feature_namespace == self._vocab_namespace:
+                with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+                    if self._weight is None:
+                        if not self._trainable:
+                            logger.warning("No pretrained embedding is assigned. The embedding should be trainable.")
+                        logger.debug("loading random embedding.")
+                        self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
+                                                       initializer=initializers.xavier_initializer(), trainable=self._trainable)
+                    else:
+                        if self._weight.shape != (self._num_embeddings, self._embedding_dim):
+                            raise ConfigureError("The parameter of embedding with shape (%s, %s), "
+                                                 "but the pretrained embedding with shape %s."
+                                                 %(self._num_embeddings, self._embedding_dim, self._weight.shape))
+                        logger.debug("loading pretrained embedding with trainable %s." % self._trainable)
+                        self._embeddings = tf.get_variable("embedding_weight",
+                                                       initializer=self._weight, trainable=self._trainable)
+                            # tf.Variable(self._weight, trainable=self._trainable, name='embedding_weight')
+                    emb = tf.nn.embedding_lookup(self._embeddings, feature)
+                    emb_drop = tf.layers.dropout(emb, self._dropout_prob, training=is_training)
+                    if self._projection_dim:
+                        emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False, kernel_initializer=initializers.xavier_initializer())
+                    outputs[feature_key] = emb_drop
+        return outputs
 
     @classmethod
-    def init_from_params(cls, params, vocab, vocab_namespace):
+    def init_from_params(cls, params, vocab):
         num_embeddings = params.pop_int('num_embeddings', None)
         embedding_dim = params.pop_int('embedding_dim')
         pretrained_file = params.pop("pretrained_file", None)
@@ -67,14 +74,14 @@ class Embedding(Encoder):
         keep_prob = params.pop_float("keep_prob", 1.0)
         encoder_name = params.pop("encoder_name", "embedding")
         tmp_dir = params.pop("tmp_dir", None)
+        vocab_namespace = params.pop('namespace', 'tokens')
 
         params.assert_empty(cls.__name__)
-
         return cls(num_embeddings=num_embeddings,
                    embedding_dim=embedding_dim,
                    projection_dim=projection_dim,
-                   keep_prob = keep_prob,
-                   pretrained_file = pretrained_file, vocab=vocab, vocab_namespace=vocab_namespace,
+                   keep_prob=keep_prob,
+                   pretrained_file=pretrained_file, vocab=vocab, vocab_namespace=vocab_namespace,
                    trainable=trainable, encoder_name=encoder_name, tmp_dir=tmp_dir)
 
 

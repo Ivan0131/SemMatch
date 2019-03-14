@@ -1,2 +1,3 @@
 from semmatch.data.token_indexers.token_indexer import TokenIndexer
 from semmatch.data.token_indexers.single_id_token_indexer import SingleIdTokenIndexer
+from semmatch.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
