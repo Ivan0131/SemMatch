@@ -7,7 +7,7 @@ from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch import nn
 
 
-@register.register_subclass('model', 'text_matching_bilstm')
+@register.register_subclass('model', 'bilstm')
 class BiLSTM(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(), hidden_dim: int = 300, keep_prob:float = 0.5,
                  model_name: str = 'bilstm'):
@@ -15,7 +15,7 @@ class BiLSTM(Model):
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = keep_prob
+        self._dropout_prob = 1-keep_prob
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -80,7 +80,7 @@ class BiLSTM(Model):
             # Get prediction
             logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
 
-            predictions = tf.arg_max(logits, -1)
+            predictions = tf.argmax(logits, -1)
             output_dict = {'logits': logits, 'predictions': predictions}
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:

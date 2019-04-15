@@ -1,0 +1,40 @@
+data:
+  name: "mrpc"
+  data_path: '../data/mrpc'
+  batch_size: 32
+  max_length: 40
+  tmp_path: "../data/mrpc/glove_abcnn"
+  token_indexers:
+    tokens:
+      name: "single_id"
+
+model:
+  name: 'abcnn'
+  num_classes: 2
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        padding_zero: "True"
+        trainable: "False"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/abcnn_glove_mrpc/embedding"
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 2
+        namespace: 'labels'
+  optimizer:
+    name: 'adagrad'
+    learning_rate: 0.06
+run_config:
+  model_dir: './outputs/abcnn_glove_mrpc/'
+hparams:
+  eval_steps: 500
+  early_stopping_max_steps_without_decrease: 100000
+  early_stopping_min_steps: 10000
+
+
+

@@ -1,0 +1,9 @@
+data:
+  name: "mnli" # or quora_data_reader
+  data_path: '../data/mnli'
+  test_filename: "multinli_0.9/multinli_0.9_test_mismatched_unlabeled.jsonl"
+  batch_size: 32
+  tmp_path: "../data/mnli/glove"
+
+export_dir: './outputs/esim_glove_mnli/export/best_exporter/1553251548'
+output_file: "pred_report.xlsx"

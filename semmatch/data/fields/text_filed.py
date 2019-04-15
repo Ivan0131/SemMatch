@@ -5,7 +5,7 @@ class TextField(Field):
     def __init__(self, tokens, token_indexers, max_length=None):
         super().__init__()
         self.tokens = tokens
-        self._token_indexers = {token_indexer.namespace:token_indexer
+        self._token_indexers = {token_indexer.get_namespace(): token_indexer
                                 for token_name, token_indexer in token_indexers.items()}
         self._indexed_tokens = None
         self._max_length = max_length

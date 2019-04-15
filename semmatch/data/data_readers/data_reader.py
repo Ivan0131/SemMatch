@@ -35,24 +35,33 @@ class DataSplit(object):
 
 @register.register('data')
 class DataReader(InitFromParams):
-    def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32, train_filename: str = None,
-                 valid_filename: str = None, test_filename: str = None, predict_filename: str = None) -> None:
+    def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32,
+                 train_filename: str = None, valid_filename: str = None, test_filename: str = None,
+                 predict_filename: str = None, max_length: int = None,
+                 emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
             raise LookupError("The data path of dataset %s is not found." % data_path)
         self._data_path = data_path
         if tmp_path is None:
-            logger.warning("The tmp path of dataset %s is not found. The tmp path is set as data path %s" % data_path)
+            logger.warning("The tmp path of dataset is not found. The tmp path is set as data path %s" % data_path)
             self._tmp_path = data_path
         else:
             self._tmp_path = tmp_path
+        if predict_filename is None:
+            predict_filename = test_filename
         self._mode_2_filename = {DataSplit.TRAIN: train_filename, DataSplit.EVAL: valid_filename,
                                  DataSplit.TEST: test_filename, DataSplit.PREDICT: predict_filename}
         self._vocab = None
         self._batch_size = batch_size
+        self._max_length = max_length
+        self._emb_pretrained_files = emb_pretrained_files
+        self._only_include_pretrained_words = only_include_pretrained_words
+
 
     def get_data_name(self):
         return self._data_name
+
 
     def get_filename_by_mode(self, mode):
         filename = self._mode_2_filename.get(mode, None)
@@ -143,13 +152,10 @@ class DataReader(InitFromParams):
 
     def dataset(self, features, mode, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
         def _parse_function(example_proto, features):
-            if features[1] is None:
-                parsed_features = tf.parse_single_example(example_proto, features[0])
-            else:
-                context_parsed, sequence_parsed = tf.parse_single_sequence_example(
-                    example_proto, context_features=features[1],
-                    sequence_features=features[0])
-                parsed_features = {**context_parsed, **sequence_parsed}
+            context_parsed, sequence_parsed = tf.parse_single_sequence_example(
+                example_proto, context_features=features[1],
+                sequence_features=features[0])
+            parsed_features = {**context_parsed, **sequence_parsed}
             return parsed_features
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
@@ -160,11 +166,13 @@ class DataReader(InitFromParams):
             dataset.shuffle(buffer_size=len(filenames))
             #dataset.repeat()
             cycle_length = min(num_threads, len(filenames))
-            dataset = dataset.apply(
-                tf.data.experimental.parallel_interleave(
-                    tf.data.TFRecordDataset,
-                    sloppy=is_training,
-                    cycle_length=cycle_length))
+            # dataset = dataset.apply(
+            #     tf.data.experimental.parallel_interleave(
+            #         tf.data.TFRecordDataset,
+            #         sloppy=is_training,
+            #         cycle_length=cycle_length))
+
+            dataset = dataset.interleave(tf.data.TFRecordDataset, cycle_length=cycle_length)
             dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
         else:
             dataset = tf.data.TFRecordDataset(filenames)
@@ -236,10 +244,13 @@ class DataReader(InitFromParams):
     def get_or_create_vocab(self):
         vocab_dir = os.path.join(self._tmp_path, VOCABULARY_DIR)
         logger.info("get or create vocabulary from %s.", vocab_dir)
-        vocab = vocabulary.Vocabulary()
+        vocab = vocabulary.Vocabulary(pretrained_files=self._emb_pretrained_files,
+                                      only_include_pretrained_words=self._only_include_pretrained_words)
         if not vocab.load_from_files(vocab_dir):
             instances = self.read(DataSplit.TRAIN)
-            vocab = vocabulary.Vocabulary.init_from_instances(instances)
+            vocab = vocabulary.Vocabulary.init_from_instances(instances,
+                                                              pretrained_files=self._emb_pretrained_files,
+                                                              only_include_pretrained_words=self._only_include_pretrained_words)
             vocab.save_to_files(vocab_dir)
         return vocab
 

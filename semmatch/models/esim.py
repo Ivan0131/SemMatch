@@ -7,7 +7,9 @@ from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch import nn
 
 
-@register.register_subclass('model', 'text_matching_esim')
+#Enhanced LSTM for Natural Language Inference
+#https://arxiv.org/abs/1609.06038
+@register.register_subclass('model', 'esim')
 class ESIM(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
                  hidden_dim: int = 300, keep_prob: float = 0.5, model_name: str = 'esim'):
@@ -15,7 +17,7 @@ class ESIM(Model):
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = keep_prob
+        self._dropout_prob = 1 - keep_prob
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -62,8 +64,7 @@ class ESIM(Model):
 
             ### Attention ###
             premise_attns, hypothesis_attns = nn.bi_uni_attention(premise_bi, hypothesis_bi, prem_seq_lengths,
-                                                                  hyp_seq_lengths,
-                                                                  similarity_function=nn.dot_similarity_function)
+                                                                  hyp_seq_lengths, func="dot")
 
             # For making attention plots,
             prem_diff = tf.subtract(premise_bi, premise_attns)
@@ -108,7 +109,13 @@ class ESIM(Model):
             logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
 
             predictions = tf.argmax(logits, -1)
+
             output_dict = {'logits': logits, 'predictions': predictions}
+
+            probs = tf.nn.softmax(logits, -1)
+            output_score = tf.estimator.export.PredictOutput(probs)
+            export_outputs = {"output_score": output_score}
+            output_dict['export_outputs'] = export_outputs
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -123,7 +130,7 @@ class ESIM(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+               # metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
 
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,

@@ -1,0 +1,44 @@
+data:
+  name: "mnli" # or quora_data_reader
+  data_path: '../data/mnli'
+  batch_size: 64
+  tmp_path: "../data/mnli/bert"
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+
+model:
+  name: 'esim'
+  num_classes: 3
+  hidden_dim: 300
+  keep_prob: 0.5
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'bert'
+        config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
+        vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+        ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
+        namespace: 'tokens'
+        keep_prob: 0.5
+      labels:
+        name: 'one_hot'
+        n_values: 3
+        namespace: 'labels'
+  optimizer:
+    name: 'adam_accum'
+    learning_rate: 0.0004
+    embedding_trainable: "False"
+    accum_iters: 16
+run_config:
+  model_dir: './outputs/esim_bert_mnli/'
+hparams:
+  eval_steps: 306
+  early_stopping_max_steps_without_decrease: 10000
+  early_stopping_min_steps: 1000
+
+
+

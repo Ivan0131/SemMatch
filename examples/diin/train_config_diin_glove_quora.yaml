@@ -1,0 +1,48 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  max_length: 48
+  train_filename: 'train.tsv'
+  valid_filename: 'dev.tsv'
+  batch_size: 64
+  tmp_path: "../data/quora/glove_diin"
+  token_indexers:
+    tokens:
+      name: "single_id"
+    chars:
+      name: "chars"
+      max_word_length: 16
+
+model:
+  name: 'diin'
+  num_classes: 2
+  hidden_dim: 300
+  keep_prob: 0.5
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: true
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/esim_diin_glove/embedding"
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 2
+        namespace: 'labels'
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.0001
+    warmup_proportion: 0.1
+run_config:
+  model_dir: './outputs/esim_diin_glove/'
+hparams:
+  train_steps: 1000000
+  eval_steps: 100
+  early_stopping_max_steps_without_decrease: 10000
+  early_stopping_min_steps: 1000
+
+
+

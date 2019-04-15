@@ -4,4 +4,5 @@ from semmatch.data.tokenizers.word_spliter import WordSplitter, WhiteWordSplitte
     BertBasicSplitter, BertWordpieceSplitter
 from semmatch.data.tokenizers.word_filter import BlankWordFilter, WordFilter
 from semmatch.data.tokenizers.word_stemmer import BlankWordStemmer, WordStemmer
-from semmatch.data.tokenizers.word_tokenizer import WordTokenizer
+from semmatch.data.tokenizers.word_tokenizer import WordTokenizer, SpacyTokenizer
+from semmatch.data.tokenizers.character_tokenizer import CharacterTokenizer

@@ -20,7 +20,8 @@ import tensorflow as tf
 class Bert(Encoder):
     def __init__(self, config_file: str, new_vocab_file: str, new_vocab_size: int,
                  num_oov_buckets: int, vocab_namespace: str, mask_namespace:str = None,
-                 old_vocab_file: str = None, old_vocab_size: int = -1,
+                 old_vocab_file: str = None, old_vocab_size: int = -1, keep_prob: float = 1.0,
+                 projection_dim: int = None,
                  ckpt_to_initialize_from: str = None,
                  use_one_hot_embeddings: bool = False, encoder_name="bert"):
         super().__init__(encoder_name=encoder_name)
@@ -34,6 +35,8 @@ class Bert(Encoder):
         self._use_one_hot_embeddings = use_one_hot_embeddings
         self._vocab_namespace = vocab_namespace
         self._mask_namespace = mask_namespace
+        self._dropout_prob = 1 - keep_prob
+        self._projection_dim = projection_dim
 
     def forward(self, features, labels, mode, params):
         outputs = dict()
@@ -44,7 +47,7 @@ class Bert(Encoder):
             feature_namespace = feature_key_fields[1].strip()
             field_name = feature_key_fields[0].strip()
             if feature_namespace == self._vocab_namespace:
-                with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+                with tf.variable_scope("embedding/"+self._vocab_namespace, reuse=tf.AUTO_REUSE):
                     input_ids = feature
                     input_mask = None
                     if self._mask_namespace:
@@ -63,8 +66,12 @@ class Bert(Encoder):
                         input_mask=input_mask,
                         use_one_hot_embeddings=self._use_one_hot_embeddings)
 
-                    embedding_output = model.get_sequence_output()
-                    outputs[feature_key] = embedding_output
+                    embedding_output = model.get_embedding_output() #model.get_sequence_output()
+                    emb_drop = tf.layers.dropout(embedding_output, self._dropout_prob, training=is_training)
+                    if self._projection_dim:
+                        emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False,
+                                                   kernel_initializer=initializers.xavier_initializer())
+                    outputs[feature_key] = emb_drop
         return outputs
 
     def get_warm_start_setting(self):
@@ -73,7 +80,7 @@ class Bert(Encoder):
         ckpt_vars = tf.train.list_variables(self._ckpt_to_initialize_from)
         ckpt_vars = [v[0] for v in ckpt_vars]
 
-        embedding_vars_mapping = dict([(os.path.join(self._encoder_name, v), v) for v in ckpt_vars if not v.startswith('cls')])
+        embedding_vars_mapping = dict([(os.path.join("embedding/"+self._vocab_namespace, v), v) for v in ckpt_vars if not v.startswith('cls')])
         if self._new_vocab_file:
             vocab_info = tf.estimator.VocabInfo(
                 new_vocab=self._new_vocab_file,
@@ -85,15 +92,15 @@ class Bert(Encoder):
             )
             ws = tf.estimator.WarmStartSettings(
                 ckpt_to_initialize_from=self._ckpt_to_initialize_from,
-                vars_to_warm_start="%s/*" % self._encoder_name,
+                vars_to_warm_start="embedding/%s/*" % self._vocab_namespace,
                 var_name_to_vocab_info={
-                    os.path.join(self._encoder_name, "bert/embeddings/word_embeddings"): vocab_info
+                    os.path.join("embedding/"+self._vocab_namespace, "bert/embeddings/word_embeddings"): vocab_info
                 },
                 var_name_to_prev_var_name=embedding_vars_mapping)
         else:
             ws = tf.estimator.WarmStartSettings(
                 ckpt_to_initialize_from=self._ckpt_to_initialize_from,
-                vars_to_warm_start="%s/*" % self._encoder_name,
+                vars_to_warm_start="embedding/%s/*" % self._vocab_namespace,
                 var_name_to_prev_var_name=embedding_vars_mapping)
         return ws
 
@@ -118,13 +125,15 @@ class Bert(Encoder):
         old_vocab_size = vocab.get_vocab_size(vocab_namespace)
         with open(new_vocab_file, 'r') as txt_file:
             new_vocab_size = len(txt_file.readlines())
+        projection_dim = params.pop_int("projection_dim", None)
+        keep_prob = params.pop_float("keep_prob", 1.0)
 
         params.assert_empty(cls.__name__)
 
         return cls(config_file=config_file, ckpt_to_initialize_from=ckpt_to_initialize_from,
                    new_vocab_file=new_vocab_file, new_vocab_size=new_vocab_size, num_oov_buckets= num_oov_buckets,
                    old_vocab_file=old_vocab_file, old_vocab_size=old_vocab_size, vocab_namespace=vocab_namespace,
-                   mask_namespace=mask_namespace,
+                   mask_namespace=mask_namespace, projection_dim=projection_dim, keep_prob=keep_prob,
                    use_one_hot_embeddings=use_one_hot_embeddings, encoder_name=encoder_name)
 
 

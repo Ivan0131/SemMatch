@@ -1,4 +1,8 @@
 numpy
+requests
+h5py
+spacy
+openpyxl
 tqdm
 pyyaml
 simplejson

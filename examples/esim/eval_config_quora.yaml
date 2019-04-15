@@ -1,0 +1,10 @@
+data:
+  name: "mnli" # or quora_data_reader
+  data_path: '../data/mnli'
+  test_filename: "dev.tsv"
+  batch_size: 32
+  tmp_path: "../data/mnli/glove"
+
+num_classes: 3
+export_dir: './outputs/esim_glove_mnli/export/best_exporter/1553251548'
+output_file: "eval_report.xlsx"

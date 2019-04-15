@@ -1,0 +1,49 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  batch_size: 32
+  tmp_path: "../data/quora/glove_bimpm"
+  token_indexers:
+    tokens:
+      name: "single_id"
+    chars:
+      name: "chars"
+      max_word_length: 10
+
+model:
+  name: 'bimpm'
+  num_classes: 2
+  hidden_dim: 100
+  keep_prob: 0.9
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "False"
+        padding_zero: "True"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/bimpm_glove_quora/embedding"
+        namespace: 'tokens'
+      chars:
+        name: "embedding"
+        embedding_dim: 20
+        trainable: "True"
+        namespace: "chars"
+      labels:
+        name: 'one_hot'
+        n_values: 2
+        namespace: 'labels'
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.001
+run_config:
+  model_dir: './outputs/bimpm_glove_quora/'
+hparams:
+  eval_steps: 500
+  early_stopping_max_steps_without_decrease: 100000
+  early_stopping_min_steps: 10000
+
+
+

@@ -47,7 +47,7 @@ class SingleIdTokenIndexer(TokenIndexer):
             text = token.text
             if self.lowercase_tokens:
                 text = text.lower()
-            counter[self.namespace][text] += 1
+            counter[self._namespace][text] += 1
 
     def tokens_to_indices(self,
                           tokens: List[Token],
@@ -63,8 +63,8 @@ class SingleIdTokenIndexer(TokenIndexer):
                 text = token.text
                 if self.lowercase_tokens:
                     text = text.lower()
-                indices.append(vocabulary.get_token_index(text, self.namespace))
-        return {self.namespace: indices}
+                indices.append(vocabulary.get_token_index(text, self._namespace))
+        return {self._namespace: indices}
 
     def pad_token_sequence(self, tokens, max_length):
         if len(tokens) > max_length:
@@ -78,18 +78,19 @@ class SingleIdTokenIndexer(TokenIndexer):
     def to_example(self, token_indexers):
         if self._max_length:
             token_indexers = self.pad_token_sequence(token_indexers, self._max_length)
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=token_indexers))
+        feature_list = [tf.train.Feature(int64_list=tf.train.Int64List(value=[token])) for token in token_indexers]
+        return tf.train.FeatureList(feature=feature_list)
 
     def get_example(self):
         return tf.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
 
     def get_padded_shapes(self):
-        return [None]
+        return [self._max_length]
 
     def get_padding_values(self):
         return 0
 
     def get_tf_shapes_and_dtypes(self):
-        return {'dtype': tf.int32, 'shape': (None, None)}
+        return {'dtype': tf.int32, 'shape': (None, self._max_length)}
 
 

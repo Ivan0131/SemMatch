@@ -99,7 +99,7 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
 
     def tokens_to_indices(self,
                           tokens: List[Token],
-                          vocabulary: Vocabulary) -> Dict[str, List[List[int]]]:
+                          vocabulary: Vocabulary):
         # TODO(brendanr): Retain the token to index mappings in the vocabulary and remove this
         # pylint pragma. See:
         # https://github.com/allenai/allennlp/blob/master/allennlp/data/token_indexers/wordpiece_indexer.py#L113
@@ -110,8 +110,8 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
         if any(text is None for text in texts):
             raise ConfigureError('ELMoTokenCharactersIndexer needs a tokenizer '
                                      'that retains text')
-        return {self.namespace: np.array([ELMoCharacterMapper.convert_word_to_char_ids(text)
-                                          for text in texts], dtype=np.int64)}
+        return {self._namespace: [np.array(ELMoCharacterMapper.convert_word_to_char_ids(text), dtype=np.int64)
+                                          for text in texts]}
 
     def pad_token_sequence(self, tokens, max_length):
         if len(tokens) >= max_length:
@@ -134,15 +134,15 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
         if len(token_indexers) == 0:
             token_indexers = np.array([[self.get_padding_values()]*ELMoCharacterMapper.max_word_length], dtype=np.int64)
         input_features = [
-            tf.train.Feature(int64_list=tf.train.Int64List(value=token_indexers[i, :]))
-            for i in range(token_indexers.shape[0])]
+            tf.train.Feature(int64_list=tf.train.Int64List(value=token_indexers[i]))
+            for i in range(len(token_indexers))]
         return tf.train.FeatureList(feature=input_features)
 
     def get_example(self):
         return tf.FixedLenSequenceFeature([ELMoCharacterMapper.max_word_length], tf.int64, allow_missing=True)
 
     def get_padded_shapes(self):
-        return [None, ELMoCharacterMapper.max_word_length]
+        return [self._max_length, ELMoCharacterMapper.max_word_length]
 
     def get_tf_shapes_and_dtypes(self):
         return {'dtype': tf.int32, 'shape': (None, None, ELMoCharacterMapper.max_word_length)}

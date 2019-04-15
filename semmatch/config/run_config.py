@@ -11,8 +11,7 @@ class RunConfig(InitFromParams, tf.estimator.RunConfig):
                  save_checkpoints_secs: int = None,
                  session_config: Dict = None, keep_checkpoint_max: int = 5,
                  keep_checkpoint_every_n_hours: int = 10000, log_step_count_steps: int = 100,
-                 train_distribute=None, device_fn=None, protocol=None,
-                 eval_distribute=None, experimental_distribute=None):
+                 train_distribute=None):
         if save_checkpoints_steps is None:
             save_checkpoints_steps = _USE_DEFAULT
         if save_checkpoints_secs is None:
@@ -26,8 +25,9 @@ class RunConfig(InitFromParams, tf.estimator.RunConfig):
                                         keep_checkpoint_max=keep_checkpoint_max,
                                         keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours,
                                         log_step_count_steps=log_step_count_steps,
-                                        train_distribute=train_distribute,
-                                        device_fn=device_fn,
-                                        protocol=protocol,
-                                        eval_distribute=eval_distribute,
-                                        experimental_distribute=experimental_distribute)
+                                        train_distribute=train_distribute
+                                       # device_fn=device_fn,
+                                       # protocol=protocol,
+                                        #eval_distribute=eval_distribute,
+                                        #experimental_distribute=experimental_distribute
+        )

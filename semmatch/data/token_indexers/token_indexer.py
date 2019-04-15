@@ -8,10 +8,10 @@ from semmatch.config.init_from_params import InitFromParams
 @register.register("token_indexer")
 class TokenIndexer(InitFromParams):
     def __init__(self, namespace: str = 'tokens'):
-        self.namespace = namespace
+        self._namespace = namespace
 
     def get_namespace(self):
-        return self.namespace
+        return self._namespace
 
     def to_example(self, token_indexers):
         raise NotImplementedError

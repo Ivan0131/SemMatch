@@ -174,9 +174,15 @@ For instance, you might provide an existing `Vocabulary` this way.
         else:
             # Pass it on as is and hope for the best.   ¯\_(ツ)_/¯
             if optional:
-                kwargs[name] = params.pop(name, default)
+                arg_value = params.pop(name, default)
+                if isinstance(arg_value, Parameters):
+                    arg_value = arg_value._params
+                kwargs[name] = arg_value
             else:
-                kwargs[name] = params.pop(name)
+                arg_value = params.pop(name)
+                if isinstance(arg_value, Parameters):
+                    arg_value = arg_value._params
+                kwargs[name] = arg_value
 
     params.assert_empty(cls.__name__)
     return kwargs

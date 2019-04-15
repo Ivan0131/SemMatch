@@ -1,0 +1,10 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  batch_size: 32
+  tmp_path: "../data/quora/glove_new"
+  test_filename:
+
+num_classes: 3
+export_dir: './outputs/esim_glove_mnli/export/best_exporter/1553251548'
+output_file: "eval_report.xlsx"

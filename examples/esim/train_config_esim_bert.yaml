@@ -1,10 +1,15 @@
 data:
   name: "quora" # or quora_data_reader
   data_path: './data/quora'
+  tmp_path: './data/quora/bert/'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 64
-  tmp_path: "./data/quora/glove"
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
 
 model:
   name: 'text_matching_esim'
@@ -15,22 +20,22 @@ model:
     name: 'base'
     encoders:
       tokens:
-        name: 'embedding'
-        embedding_dim: 300
-        trainable: true
-        pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/esim_glove/embedding"
+        name: 'bert'
+        config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
+        vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+        ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
         namespace: 'tokens'
       labels:
         name: 'one_hot'
         n_values: 2
-        namespace: 'labels'
   optimizer:
-    name: 'adam'
+    name: 'adam_accum'
+    embedding_trainable: "False"
     learning_rate: 0.001
     warmup_proportion: 0.1
+    accum_iters: 16
 run_config:
-  model_dir: './outputs/esim/'
+  model_dir: './outputs/esim_bert/'
 hparams:
   train_steps: 1000000
   eval_steps: 100

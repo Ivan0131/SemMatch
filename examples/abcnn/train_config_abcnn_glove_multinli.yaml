@@ -1,0 +1,37 @@
+data:
+  name: "mnli" # or mnli_data_reader
+  data_path: '../data/mnli'
+  batch_size: 32
+  max_length: 40
+  tmp_path: "../data/mnli/glove_abcnn"
+
+model:
+  name: 'abcnn'
+  num_classes: 3
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "False"
+        padding_zero: "True"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/abcnn_glove_mnli/embedding"
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 3
+        namespace: 'labels'
+  optimizer:
+    name: 'adagrad'
+    learning_rate: 0.06
+run_config:
+  model_dir: './outputs/abcnn_glove_mnli/'
+hparams:
+  eval_steps: 500
+  early_stopping_max_steps_without_decrease: 100000
+  early_stopping_min_steps: 10000
+
+
+

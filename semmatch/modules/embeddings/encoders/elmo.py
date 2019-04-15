@@ -19,10 +19,13 @@ import tensorflow as tf
 DTYPE = 'float32'
 
 
+#Deep contextualized word representations
+#https://arxiv.org/abs/1802.05365
 @register.register_subclass("encoder", 'elmo')
 class ELMo(Encoder):
     def __init__(self, config_file: str,
                  vocab_namespace: str, ckpt_to_initialize_from: str = None, weight_file: str = None,
+                 keep_prob: float = 1.0, projection_dim: int = None,
                  encoder_name="elmo"):
         super().__init__(encoder_name=encoder_name)
         # self._weight_file = weight_file
@@ -30,6 +33,8 @@ class ELMo(Encoder):
         self._ckpt_to_initialize_from = ckpt_to_initialize_from
         self._config_file = config_file
         self._weight_file = weight_file
+        self._dropout_prob = 1 - keep_prob
+        self._projection_dim = projection_dim
         #self._token_embedding_file = os.path.join(tmp_dir,  'elmo_token_embeddings.hdf5')
         #dump_token_embeddings(old_vocab_file, self._elmo_config, self._weight_file, self._token_embedding_file)
 
@@ -37,7 +42,7 @@ class ELMo(Encoder):
         outputs = dict()
         bilm = BidirectionalLanguageModel(
             self._config_file,
-            self._weight_file)
+            self._weight_file, encoder_name=self._encoder_name)
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
         for (feature_key, feature) in features.items():
@@ -45,12 +50,18 @@ class ELMo(Encoder):
             feature_namespace = feature_key_fields[1].strip()
             #field_name = feature_key_fields[0].strip()
             if feature_namespace == self._vocab_namespace:
-                input_ids = feature
-                embeddings_op = bilm(input_ids)
-                with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
-                    elmo_embeddings_input = weight_layers('input', embeddings_op, l2_coef=0.0)
-                    outputs[feature_key] = elmo_embeddings_input['weighted_op']
-        print(tf.trainable_variables())
+                with tf.variable_scope("embedding/" + self._vocab_namespace):
+                    input_ids = feature
+                    embeddings_op = bilm(input_ids)
+                    with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+                        elmo_embeddings_input = weight_layers('input', embeddings_op, l2_coef=0.0)
+                        embedding_output = elmo_embeddings_input['weighted_op'] #embeddings_op['token_embeddings'][:, 1:-1, :] #
+                        emb_drop = tf.layers.dropout(embedding_output, self._dropout_prob, training=is_training)
+                    if self._projection_dim:
+                        emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False,
+                                                   kernel_initializer=initializers.xavier_initializer())
+                    outputs[feature_key] = emb_drop
+        #print(tf.trainable_variables())
         return outputs
 
     def get_warm_start_setting(self):
@@ -61,11 +72,13 @@ class ELMo(Encoder):
         ckpt_vars = tf.train.list_variables(self._ckpt_to_initialize_from)
         ckpt_vars = [v[0] for v in ckpt_vars if v[0] not in ['train_perplexity', 'global_step', "lm/softmax/W",
                                                           "lm/softmax/b"] and "Adagrad" not in v[0]]
-        embedding_vars_mapping = dict([(_convert_checkpoint_weight_name(v), v) for v in ckpt_vars])
+        embedding_vars_mapping = dict([("embedding/" + self._vocab_namespace + "//" +
+                                        _convert_checkpoint_weight_name(v), v) for v in ckpt_vars])
         print(embedding_vars_mapping)
 
         ws = tf.estimator.WarmStartSettings(
-            vars_to_warm_start=[_convert_checkpoint_weight_name(v) + ":" for v in ckpt_vars],
+            vars_to_warm_start=["embedding/" + self._vocab_namespace + "//" + _convert_checkpoint_weight_name(v) + ":"
+                                for v in ckpt_vars],
             ckpt_to_initialize_from=self._ckpt_to_initialize_from,
             var_name_to_prev_var_name=embedding_vars_mapping)
         return ws
@@ -242,6 +255,7 @@ class BidirectionalLanguageModel(object):
             use_character_inputs=True,
             embedding_weight_file=None,
             max_batch_size=128,
+            encoder_name = "elmo"
     ):
         '''
         Creates the language model computational graph and loads weights
@@ -281,6 +295,7 @@ class BidirectionalLanguageModel(object):
 
         self._ops = {}
         self._graphs = {}
+        self._encoder_name = encoder_name
 
     def __call__(self, ids_placeholder):
         '''
@@ -311,13 +326,14 @@ class BidirectionalLanguageModel(object):
             # need to create the graph
             if len(self._ops) == 0:
                 # first time creating the graph, don't reuse variables
-                lm_graph = BidirectionalLanguageModelGraph(
-                    self._options,
-                    self._weight_file,
-                    ids_placeholder,
-                    embedding_weight_file=self._embedding_weight_file,
-                    use_character_inputs=self._use_character_inputs,
-                    max_batch_size=self._max_batch_size)
+                with tf.variable_scope(''):
+                    lm_graph = BidirectionalLanguageModelGraph(
+                        self._options,
+                        self._weight_file,
+                        ids_placeholder,
+                        embedding_weight_file=self._embedding_weight_file,
+                        use_character_inputs=self._use_character_inputs,
+                        max_batch_size=self._max_batch_size, encoder_name=self._encoder_name)
             else:
                 with tf.variable_scope('', reuse=True):
                     lm_graph = BidirectionalLanguageModelGraph(
@@ -326,7 +342,7 @@ class BidirectionalLanguageModel(object):
                         ids_placeholder,
                         embedding_weight_file=self._embedding_weight_file,
                         use_character_inputs=self._use_character_inputs,
-                        max_batch_size=self._max_batch_size)
+                        max_batch_size=self._max_batch_size, encoder_name=self._encoder_name)
 
             ops = self._build_ops(lm_graph)
             self._ops[ids_placeholder] = ops
@@ -406,7 +422,7 @@ class BidirectionalLanguageModel(object):
         }
 
 
-def _pretrained_initializer(varname, weight_file, embedding_weight_file=None):
+def _pretrained_initializer(varname, weight_file, embedding_weight_file=None, encoder_name="elmo"):
     '''
     We'll stub out all the initializers in the pretrained LM with
     a function that loads the weights from the file
@@ -423,7 +439,8 @@ def _pretrained_initializer(varname, weight_file, embedding_weight_file=None):
                 root + '/LSTMCell/W_P_0'
 
     # convert the graph name to that in the checkpoint
-    varname_in_file = varname[3:]
+    varname_new = varname.replace("//", "/")
+    varname_in_file = "/".join(varname_new.split("/")[3:]) #varname[3:]
     if varname_in_file.startswith('RNN'):
         varname_in_file = weight_name_map[varname_in_file]
 
@@ -443,12 +460,13 @@ def _pretrained_initializer(varname, weight_file, embedding_weight_file=None):
                 # Have added a special 0 index for padding not present
                 # in the original model.
                 char_embed_weights = fin[varname_in_file][...]
-                weights = np.zeros(
-                    (char_embed_weights.shape[0],
-                     char_embed_weights.shape[1]),
-                    dtype=DTYPE
-                )
-                weights[:, :] = char_embed_weights
+                # weights = np.zeros(
+                #     (char_embed_weights.shape[0],
+                #      char_embed_weights.shape[1]),
+                #     dtype=DTYPE
+                # )
+                # weights[:, :] = char_embed_weights
+                weights = char_embed_weights
             elif varname_in_file == 'pad_embed':
                 weights = np.zeros((1, fin['char_embed'].shape[1]), dtype=DTYPE)
             else:
@@ -475,7 +493,7 @@ class BidirectionalLanguageModelGraph(object):
 
     def __init__(self, options, weight_file, ids_placeholder,
                  use_character_inputs=True, embedding_weight_file=None,
-                 max_batch_size=128):
+                 max_batch_size=128, encoder_name="elmo"):
 
         self.options = options
         self._max_batch_size = max_batch_size
@@ -487,7 +505,7 @@ class BidirectionalLanguageModelGraph(object):
         def custom_getter(getter, name, *args, **kwargs):
             kwargs['trainable'] = False
             kwargs['initializer'] = _pretrained_initializer(
-                name, weight_file, embedding_weight_file
+                name, weight_file, embedding_weight_file, encoder_name=encoder_name
             )
             return getter(name, *args, **kwargs)
 

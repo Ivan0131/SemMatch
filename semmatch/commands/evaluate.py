@@ -3,21 +3,14 @@ import tensorflow as tf
 from semmatch.commands.command import Command
 from semmatch.utils import register
 from semmatch.config.parameters import Parameters
-from semmatch.utils.exception import ConfigureError
 from semmatch.data.data_readers.data_reader import DataSplit, DataReader
 from tensorflow.python.saved_model import loader_impl
-import csv
 from openpyxl import Workbook
 import numpy as np
 from tensorflow.python.estimator import model_fn
-from tensorflow.python.saved_model import signature_constants
-from semmatch.models import Model
-from semmatch.config.run_config import RunConfig
-from semmatch.config.hparams import HParams
-from semmatch.utils.logger import logger
-from tensorflow.python.estimator import estimator
 from semmatch.utils.saved_model import get_meta_graph_def_for_mode, get_signature_def_for_mode, \
     check_same_dtype_and_shape
+from sklearn import metrics
 
 
 @register.register_subclass('command', 'eval')
@@ -26,7 +19,7 @@ class Evaluate(Command):
     description = 'evaluate a saved model on a specified dataset'
     parser = None
 
-    def __init__(self, data_reader=None, eval_input_fn=None, vocab=None, export_dir=None, output_file=None):
+    def __init__(self, data_reader=None, eval_input_fn=None, num_classes=None, vocab=None, export_dir=None, output_file=None):
         if data_reader is not None and eval_input_fn is None:
             self._eval_input_fn = data_reader.make_estimator_input_fn(DataSplit.EVAL, force_repeat=False)
             vocab = data_reader.get_vocab()
@@ -45,7 +38,10 @@ class Evaluate(Command):
         input_map = self.generate_input_map(signature_def, next_element)
         output_tensor_names = [
             value.name for value in signature_def.outputs.values()]
-        tags = model_fn.EXPORT_TAG_MAP[mode]
+        try:
+            tags = model_fn.EXPORT_TAG_MAP[mode]
+        except AttributeError as e:
+            tags = ['serve']
         saver, output_tensors = self.saved_model_loader.load_graph(
             tf.get_default_graph(), tags, input_map=input_map, return_elements=output_tensor_names)
         output_map = dict(zip(output_tensor_names, output_tensors))
@@ -61,11 +57,13 @@ class Evaluate(Command):
         #####xlsx wirte######
         wb = Workbook(write_only=True)
         ws = wb.create_sheet('examples')
-        ws.append(['question', 'answer', 'true_label', 'predict'])
+        ws.append(['question', 'answer', 'true_label', 'predict', 'score'])
 
+        y_true = []
+        y_pred = []
         total_num = 0
-        accuracy = 0
-        confusion_matrix = [[0, 0] for i in range(2)]
+        #accuracy = 0
+        #confusion_matrix = [[0 for j in range(num_classes)] for i in range(num_classes)]
 
         with tf.Session() as sess:
             self.saved_model_loader.restore_variables(sess, saver)
@@ -79,17 +77,22 @@ class Evaluate(Command):
                     data_batch = output_vals['inputs']
                     premise_tokens_val, hypothesis_tokens_val, true_label_val = \
                         data_batch['premise/tokens'], data_batch['hypothesis/tokens'], data_batch['label/labels']
-                    predictions = output_vals['output']
-                    num_batch = predictions.shape[0]
-                    #######################
+                    probs = output_vals['output']
+                    num_batch = probs.shape[0]
                     total_num += num_batch
+                    print("processing %s/%s"%(num_batch, total_num))
+                    #######################
+                    predictions = probs
+                    y_true.append(true_label_val)
+                    y_pred.append(predictions)
 
-                    for i in range(predictions.shape[0]):
-                        predict = predictions[i]
-                        label = true_label_val[i]
-                        if predict == label:
-                            accuracy += 1
-                        confusion_matrix[label][predict] += 1
+                    # for i in range(probs.shape[0]):
+                    #     predictions = (probs > 0.5).astype(np.int32)
+                    #     predict = predictions[i]
+                    #     label = true_label_val[i]
+                    #     if predict == label:
+                    #         accuracy += 1
+                    #     confusion_matrix[label][predict] += 1
                         ################
                     for i in range(num_batch):
                         premise_str = vocab.convert_indexes_to_tokens(premise_tokens_val[i], 'tokens')
@@ -98,27 +101,45 @@ class Evaluate(Command):
                         hypothesis_str = " ".join(hypothesis_str)
                         true_label = true_label_val[i]
                         predict = predictions[i]
-                        ws.append([premise_str, hypothesis_str, str(true_label), str(predict)])
-                    print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
+                        prob = probs[i]
+                        ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob)])
+                    #print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
                 except tf.errors.OutOfRangeError as e:
-                    logger.warning(e)
-                    accuracy = accuracy/total_num
-                    precise = confusion_matrix[1][1]/(confusion_matrix[0][1]+confusion_matrix[1][1])
-                    recall = confusion_matrix[1][1]/(confusion_matrix[1][0]+confusion_matrix[1][1])
-                    f1score = (precise+recall)/2
+                    #logger.warning(e)
+                    y_true = np.concatenate(y_true, axis=0)
+                    y_pred = np.concatenate(y_pred, axis=0)
+                    avg_param = 'micro'
+                    if num_classes == 2:
+                        avg_param = 'binary'
+                    accuracy = metrics.accuracy_score(y_true, y_pred)#accuracy/total_num
+                    precise, recall, f1score, support = metrics.precision_recall_fscore_support(y_true, y_pred, average=avg_param)
+                    confusion_matrix = metrics.confusion_matrix(y_true, y_pred)
+                    #confusion_matrix[1][1]/(confusion_matrix[0][1]+confusion_matrix[1][1])
+                    #recall = confusion_matrix[1][1]/(confusion_matrix[1][0]+confusion_matrix[1][1])
+                    #f1score = (precise+recall)/2
                     print("metrics:")
-                    confmx = """ label \ predict | 0 | 1 
-                       ------------------------------------
-                       0      |     {}     |    {}        
-                       1   |     {}     |    {}      """.format(
-                        confusion_matrix[0][0], confusion_matrix[0][1],
-                        confusion_matrix[1][0], confusion_matrix[1][1])
-                    print(confmx)
+                    confmx_str = "label \ predict "
+                    for i in range(num_classes):
+                        confmx_str += "| %s | "%i
+                    confmx_str += "\n"
+                    for i in range(num_classes):
+                        confmx_str += "| %s | "%i
+                        for j in range(num_classes):
+                            confmx_str += "| %s | "%confusion_matrix[i][j]
+                        confmx_str += "\n"
+
+                    print(confmx_str)
                     print("accuracy: %s, precise: %s, recall: %s, f1-score: %s" % (accuracy, precise, recall, f1score))
                     ws = wb.create_sheet(title='metrics')
-                    ws.append(['label \ predict', "0", "1"])
-                    ws.append(['0', str(confusion_matrix[0][0]), str(confusion_matrix[0][1])])
-                    ws.append(['1', str(confusion_matrix[1][0]), str(confusion_matrix[1][1])])
+                    legend = ["label \ predict "]
+                    for i in range(num_classes):
+                        legend.append(str(i))
+                    ws.append(legend)
+                    for i in range(num_classes):
+                        row = [str(i)]
+                        for j in range(num_classes):
+                            row.append(str(confusion_matrix[i][j]))
+                        ws.append(row)
                     ws.append([])
                     ws.append([])
                     ws.append(['accuracy', 'precise', 'recall', 'f1-score'])
@@ -130,6 +151,7 @@ class Evaluate(Command):
                     break
 
     def generate_input_map(self, signature_def, features, labels=None):
+        features_mapping = {"input_query": "premise/tokens", "input_title": "hypothesis/tokens"}
         inputs = signature_def.inputs
         input_map = {}
         for (key, tensor_info) in inputs.items():
@@ -137,16 +159,20 @@ class Evaluate(Command):
             if ':' in input_name:
                 input_name = input_name[:input_name.find(':')]
             control_dependency_name = '^' + input_name
-            if key in features:
-                check_same_dtype_and_shape(features[key], tensor_info, key)
-                input_map[input_name] = input_map[control_dependency_name] = features[key]
-            elif labels is not None and key in labels:
-                check_same_dtype_and_shape(labels[key], tensor_info, key)
-                input_map[input_name] = input_map[control_dependency_name] = labels[key]
+            if features_mapping is not None and key in features_mapping:
+                feature_key = features_mapping[key]
+            else:
+                feature_key = key
+            if feature_key in features:
+                check_same_dtype_and_shape(features[feature_key], tensor_info, key)
+                input_map[input_name] = input_map[control_dependency_name] = features[feature_key]
+            elif labels is not None and feature_key in labels:
+                check_same_dtype_and_shape(labels[feature_key], tensor_info, key)
+                input_map[input_name] = input_map[control_dependency_name] = labels[feature_key]
             else:
                 raise ValueError(
                     'Key \"%s\" not found in features or labels passed in to the model '
-                    'function. All required keys: %s' % (key, inputs.keys()))
+                    'function. All required keys: %s' % (feature_key, inputs.keys()))
         return input_map
 
     @classmethod
@@ -155,9 +181,10 @@ class Evaluate(Command):
         data_reader = DataReader.init_from_params(params.pop('data'))
         export_dir = params.pop('export_dir')
         output_file = params.pop('output_file')
+        num_classes = params.pop_int('num_classes')
         #####embedding mapping##########
         params.assert_empty(cls.__name__)
-        cls(data_reader=data_reader, export_dir=export_dir, output_file=output_file)
+        cls(data_reader=data_reader, export_dir=export_dir, output_file=output_file, num_classes=num_classes)
 
     @classmethod
     def add_subparser(cls, parser):

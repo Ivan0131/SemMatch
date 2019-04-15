@@ -1,5 +1,6 @@
-from semmatch.data.data_readers.data_reader import DataReader
+from semmatch.data.data_readers.data_reader import DataReader, DataSplit
 from semmatch.data.data_readers.quora_data_reader import QuoraDataReader
 from semmatch.data.data_readers.snli_data_reader import SnliDataReader
 from semmatch.data.data_readers.multinli_data_reader import MultinliDataReader
 from semmatch.data.data_readers.general_data_reader import GeneralDataReader
+from semmatch.data.data_readers.mrpc_data_reader import MRPCDataReader

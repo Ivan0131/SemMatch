@@ -60,13 +60,14 @@ class Train(Command):
                 serving_input_receiver_fn=serving_input_receiver_fn,
                 exports_to_keep=5
             )
-            exporters = [best_exporter, latest_export]
+            exporters = [latest_export, best_exporter]
 
-        self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn, max_steps=hparams.train_steps,
-                                                  hooks=[early_stopping])
+        self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn,
+                                                  max_steps=hparams.train_steps, hooks=[early_stopping])
         if self._valid_input_fn:
             self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
                                                      exporters=exporters)
+        #print(self._estimator.signature_def[tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY])
 
         tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
         # print(eval_results)

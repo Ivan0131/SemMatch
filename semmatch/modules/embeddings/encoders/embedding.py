@@ -16,7 +16,7 @@ import gzip
 @register.register_subclass("encoder", 'embedding')
 class Embedding(Encoder):
     def __init__(self, embedding_dim: int, num_embeddings: int = None, projection_dim: int = None,
-                 vocab: Vocabulary = None, vocab_namespace: str = None, keep_prob: float = 1.0,
+                 vocab: Vocabulary = None, vocab_namespace: str = None, keep_prob: float = 1.0, padding_zero: bool = False,
                  trainable: bool = True, pretrained_file: str = None, tmp_dir=None, encoder_name="embedding"):
         super().__init__(encoder_name=encoder_name)
         if num_embeddings is None:
@@ -32,6 +32,7 @@ class Embedding(Encoder):
         self._weight = weight
         self._trainable = trainable
         self._embeddings = None
+        self._padding_zero = padding_zero
         self._vocab_namespace = vocab_namespace
 
     def forward(self, features, labels, mode, params):
@@ -41,21 +42,34 @@ class Embedding(Encoder):
         for (feature_key, feature) in features.items():
             feature_namespace = feature_key.split("/")[1].strip()
             if feature_namespace == self._vocab_namespace:
-                with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
+                with tf.variable_scope("embedding/"+self._vocab_namespace, reuse=tf.AUTO_REUSE):
                     if self._weight is None:
                         if not self._trainable:
                             logger.warning("No pretrained embedding is assigned. The embedding should be trainable.")
                         logger.debug("loading random embedding.")
-                        self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
+                        if self._padding_zero:
+                            word_embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings-1, self._embedding_dim),
                                                        initializer=initializers.xavier_initializer(), trainable=self._trainable)
+                            pad_embeddings = tf.constant(np.zeros([1, self._embedding_dim]), dtype=tf.float32)
+                            self._embeddings = tf.concat([pad_embeddings, word_embeddings], axis=0)
+                        else:
+                            self._embeddings = tf.get_variable("embedding_weight", shape=(self._num_embeddings, self._embedding_dim),
+                                                           initializer=initializers.xavier_initializer(), trainable=self._trainable)
                     else:
                         if self._weight.shape != (self._num_embeddings, self._embedding_dim):
                             raise ConfigureError("The parameter of embedding with shape (%s, %s), "
                                                  "but the pretrained embedding with shape %s."
                                                  %(self._num_embeddings, self._embedding_dim, self._weight.shape))
                         logger.debug("loading pretrained embedding with trainable %s." % self._trainable)
-                        self._embeddings = tf.get_variable("embedding_weight",
-                                                       initializer=self._weight, trainable=self._trainable)
+                        if self._padding_zero:
+                            word_embeddings = tf.get_variable("embedding_weight",
+                                                              initializer=self._weight[1:, :],
+                                                              trainable=self._trainable)
+                            pad_embeddings = tf.constant(np.zeros([1, self._embedding_dim]), dtype=tf.float32)
+                            self._embeddings = tf.concat([pad_embeddings, word_embeddings], axis=0)
+                        else:
+                            self._embeddings = tf.get_variable("embedding_weight",
+                                                           initializer=self._weight, trainable=self._trainable)
                             # tf.Variable(self._weight, trainable=self._trainable, name='embedding_weight')
                     emb = tf.nn.embedding_lookup(self._embeddings, feature)
                     emb_drop = tf.layers.dropout(emb, self._dropout_prob, training=is_training)
@@ -75,12 +89,13 @@ class Embedding(Encoder):
         encoder_name = params.pop("encoder_name", "embedding")
         tmp_dir = params.pop("tmp_dir", None)
         vocab_namespace = params.pop('namespace', 'tokens')
+        padding_zero = params.pop_bool('padding_zero', 'False')
 
         params.assert_empty(cls.__name__)
         return cls(num_embeddings=num_embeddings,
                    embedding_dim=embedding_dim,
                    projection_dim=projection_dim,
-                   keep_prob=keep_prob,
+                   keep_prob=keep_prob, padding_zero=padding_zero,
                    pretrained_file=pretrained_file, vocab=vocab, vocab_namespace=vocab_namespace,
                    trainable=trainable, encoder_name=encoder_name, tmp_dir=tmp_dir)
 

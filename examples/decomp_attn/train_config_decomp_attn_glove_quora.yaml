@@ -1,0 +1,39 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  batch_size: 60
+  tmp_path: "../data/quora/glove"
+  token_indexers:
+    tokens:
+      name: "single_id"
+
+model:
+  name: 'decomp_attn'
+  num_classes: 2
+  hidden_dim: 50
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "False"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/decomp_attn_glove_quora/embedding"
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 2
+        namespace: 'labels'
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.001
+run_config:
+  model_dir: './outputs/decomp_attn_glove_quora/'
+hparams:
+  eval_steps: 500
+  early_stopping_max_steps_without_decrease: 10000
+  early_stopping_min_steps: 1000
+
+
+

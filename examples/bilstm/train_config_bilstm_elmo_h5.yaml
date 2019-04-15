@@ -1,0 +1,44 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: './data/quora'
+  tmp_path: './data/quora/elmo/'
+  train_filename: 'train.tsv'
+  valid_filename: 'dev.tsv'
+  batch_size: 32
+  tokenizer:
+    name: "word_tokenizer"
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
+
+model:
+  name: 'text_matching_bilstm'
+  num_classes: 2
+  hidden_dim: 300
+  keep_prob: 0.5
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'elmo'
+        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        namespace: 'elmo_characters'
+      labels:
+        name: 'one_hot'
+        n_values: 2
+  optimizer:
+    name: 'adam'
+    embedding_trainable: "False"
+    learning_rate: 0.0001
+    warmup_proportion: 0.1
+run_config:
+  model_dir: './outputs/bilstm_elmo/'
+hparams:
+  train_steps: 1000000
+  eval_steps: 100
+  early_stopping_max_steps_without_decrease: 10000
+  early_stopping_min_steps: 1000
+
+
+

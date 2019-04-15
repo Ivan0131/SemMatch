@@ -83,7 +83,15 @@ class Parameters(collections.MutableMapping):
     def pop_bool(self, path, default=None):
         value = self.pop(path, default)
         if value and not isinstance(value, Parameters):
-            return bool(value)
+            if isinstance(value, str):
+                if value.strip().lower() == "false":
+                    return False
+                elif value.strip().lower() == "true":
+                    return True
+                else:
+                    return bool(value)
+            else:
+                return bool(value)
         else:
             return value
 

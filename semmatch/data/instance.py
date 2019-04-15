@@ -31,7 +31,6 @@ class Instance(Mapping[str, field.Field]):
     def to_example(self):
         """Helper: build tf.Example from (string -> int/float/str list) dictionary."""
         instance_features = {}
-        bool_feature_list = False
         for field_name, field in self.fields.items():
             field_features = field.to_example()
             if not field_features:
@@ -39,24 +38,19 @@ class Instance(Mapping[str, field.Field]):
             if isinstance(field_features, Dict):
                 for (feature_name, feature) in field_features.items():
                     instance_features[field_name+"/"+feature_name] = feature
-                    if isinstance(feature, tf.train.FeatureList):
-                        bool_feature_list = True
             else:
                 raise ValueError("The field %s to example is error." % (field_name, ))
 
-        if bool_feature_list:
-            context_features = dict()
-            sequence_features = dict()
-            for feature_key, feature in instance_features.items():
-                if isinstance(feature, tf.train.Feature):
-                    context_features[feature_key] = instance_features[feature_key]
-                else:
-                    sequence_features[feature_key] = instance_features[feature_key]
-                    #instance_features[feature_key] = tf.train.FeatureList(feature=[feature])
-            return tf.train.SequenceExample(context=tf.train.Features(feature=context_features),
-                                            feature_lists=tf.train.FeatureLists(feature_list=sequence_features))
-        else:
-            return tf.train.Example(features=tf.train.Features(feature=instance_features))
+        context_features = dict()
+        sequence_features = dict()
+        for feature_key, feature in instance_features.items():
+            if isinstance(feature, tf.train.Feature):
+                context_features[feature_key] = instance_features[feature_key]
+            else:
+                sequence_features[feature_key] = instance_features[feature_key]
+                #instance_features[feature_key] = tf.train.FeatureList(feature=[feature])
+        return tf.train.SequenceExample(context=tf.train.Features(feature=context_features),
+                                        feature_lists=tf.train.FeatureLists(feature_list=sequence_features))
 
     def get_example_features(self):
         instance_features = {}
@@ -68,24 +62,17 @@ class Instance(Mapping[str, field.Field]):
             if isinstance(field_features, Dict):
                 for (feature_name, feature) in field_features.items():
                     instance_features[field_name + "/" + feature_name] = feature
-                    if isinstance(feature, tf.FixedLenSequenceFeature) and len(feature.shape) != 0:
-                        bool_feature_list = True
             else:
                 raise ValueError("The field %s get example features is error." % (field_name,))
 
-        if bool_feature_list:
-            context_features = {}
-            sequence_features = {}
-            for feature_key, feature in instance_features.items():
-                if isinstance(feature, tf.FixedLenSequenceFeature):
-                    sequence_features[feature_key] = instance_features[feature_key]
-                else:
-                    context_features[feature_key] = instance_features[feature_key]
-            return sequence_features, context_features
-        else:
-        #instance_features['label/labels'] = tf.FixedLenSequenceFeature([], dtype=tf.int64, allow_missing=True)
-        #del instance_features['label/labels']
-            return instance_features, None
+        context_features = {}
+        sequence_features = {}
+        for feature_key, feature in instance_features.items():
+            if isinstance(feature, tf.FixedLenSequenceFeature):
+                sequence_features[feature_key] = instance_features[feature_key]
+            else:
+                context_features[feature_key] = instance_features[feature_key]
+        return sequence_features, context_features
 
     def get_padded_shapes(self):
         instance_padded_shapes = {}

@@ -61,14 +61,16 @@ class IndexToTokenDict(ConditionDefaultDict):
 
 
 class Vocabulary(object):
-    def __init__(self, counter=None, non_padded_namespaces=DEFAULT_NON_PADDED_NAMESPACES):
+    def __init__(self, counter=None, non_padded_namespaces=DEFAULT_NON_PADDED_NAMESPACES,
+                 pretrained_files=None, only_include_pretrained_words=False):
         self._padding_token = DEFAULT_PADDING_TOKEN
         self._oov_token = DEFAULT_OOV_TOKEN
         self._non_padded_namespaces = set(non_padded_namespaces)
         self._token_to_index = TokenToIndexDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
         self._index_to_token = IndexToTokenDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
         self._namespace_to_path = dict()
-        self._extend(counter)
+        self._extend(counter, pretrained_files=pretrained_files,
+                     only_include_pretrained_words=only_include_pretrained_words)
 
     def save_to_files(self, directory):
         os.makedirs(directory, exist_ok=True)
@@ -159,16 +161,38 @@ class Vocabulary(object):
         else:
             return self._token_to_index[namespace][token]
 
-    def _extend(self, counter=None, min_count=5):
+    def _extend(self, counter=None, min_count=5, pretrained_files=None, only_include_pretrained_words=False):
+        pretrained_files = pretrained_files or {}
+        pretrained_files = dict(pretrained_files)
         counter = counter or {}
         for namespace in counter:
-            if namespace in self._non_padded_namespaces:
+            if namespace in pretrained_files:
+                pretrained_list = []
+                pretrained_path = pretrained_files[namespace]
+                with open(pretrained_path, 'r', encoding='utf-8') as embeddings_file:
+                    for line in tqdm.tqdm(embeddings_file):
+                        token = line.split(' ', 1)[0]
+                        fields = line.rstrip().split(' ')
+                        if len(fields) != 2:
+                            pretrained_list.append(token)
+                pretrained_set = set(pretrained_list)
+            else:
+                pretrained_set = None
+
+            if namespace_match(self._non_padded_namespaces, namespace):
                 counter_keys = sorted(counter[namespace].keys())
             else:
                 counter_keys = counter[namespace].keys()
             for token in counter_keys:
-                if counter[namespace][token] > min_count:
-                    self.add_token_to_vocab(token, namespace)
+                if pretrained_set is None:
+                    if counter[namespace][token] > min_count:
+                        self.add_token_to_vocab(token, namespace)
+                else:
+                    if only_include_pretrained_words:
+                        if counter[namespace][token] > min_count and token in pretrained_set:
+                            self.add_token_to_vocab(token, namespace)
+                    elif counter[namespace][token] > min_count or token in pretrained_set:
+                            self.add_token_to_vocab(token, namespace)
 
     def get_vocab_size(self, namespace='tokens'):
         if namespace not in self._token_to_index: raise ConfigureError("namespace %s not in vocabulary."%namespace)
@@ -183,7 +207,7 @@ class Vocabulary(object):
         return self._index_to_token[namespace]
 
     @classmethod
-    def init_from_instances(cls, instances):
+    def init_from_instances(cls, instances, pretrained_files=None, only_include_pretrained_words=False):
         logger.info("create vocab from instance")
         namespace_counter = collections.defaultdict(lambda: collections.defaultdict(int))
         try:
@@ -191,7 +215,8 @@ class Vocabulary(object):
                 instance.count_vocab(namespace_counter)
         except StopIteration as e:
             logger.error("The data reader builds vocabulary error with StopIteration.")
-        return cls(namespace_counter)
+        return cls(namespace_counter, pretrained_files=pretrained_files,
+                   only_include_pretrained_words=only_include_pretrained_words)
 
     def get_vocab_path(self, namespace):
         if namespace not in self._namespace_to_path:

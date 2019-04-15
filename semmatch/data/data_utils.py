@@ -4,7 +4,8 @@ from semmatch.utils.logger import logger
 import multiprocessing
 import zipfile
 import requests
-
+from urllib.error import HTTPError
+from urllib.request import urlretrieve
 
 def cpu_count():
   """Return the number of available cores."""
@@ -91,20 +92,23 @@ def maybe_download(filepath, url):
     try:
         tf.gfile.Copy(url, filepath)
     except tf.errors.UnimplementedError:
-        if url.startswith("http"):
-            os.system('wget --no-check-certificat ' + url+" -O "+filepath.replace(" ", "\ "))
-            # inprogress_filepath = filepath + ".incomplete"
+        try:
+            inprogress_filepath = filepath + ".incomplete"
             # r = requests.get(url)
             # with open(inprogress_filepath, 'wb') as outfile:
             #     outfile.write(r.content)
-            #
-            # # inprogress_filepath, _ = urllib.urlretrieve(
-            # #     uri, inprogress_filepath, reporthook=download_report_hook)
-            # # Print newline to clear the carriage return from the download progress
-            # print()
-            # os.rename(inprogress_filepath, filepath)
-        else:
-            raise ValueError("Unrecognized URI: " + filepath)
+
+            inprogress_filepath, _ = urlretrieve(
+                url, inprogress_filepath, reporthook=download_report_hook)
+            # Print newline to clear the carriage return from the download progress
+            print()
+            os.rename(inprogress_filepath, filepath)
+        except HTTPError:
+            if url.startswith("http"):
+                os.system('wget --no-check-certificat ' + url+" -O "+filepath.replace(" ", "\ "))
+
+            else:
+                raise ValueError("Unrecognized URI: " + filepath)
     statinfo = os.stat(filepath)
     logger.info("Successfully downloaded %s, %s bytes." %
                     (os.path.basename(filepath), statinfo.st_size))

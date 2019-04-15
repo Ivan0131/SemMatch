@@ -1,15 +1,15 @@
 data:
   name: "quora" # or quora_data_reader
   data_path: './data/quora'
-  tmp_path: './data/quora/bert/'
+  tmp_path: './data/quora/elmo/'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
-  batch_size: 256
+  batch_size: 48
   tokenizer:
     name: "word_tokenizer"
-    word_splitter:
-      name: "bert_wordpiece_splitter"
-      vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
 
 model:
   name: 'text_matching_esim'
@@ -20,20 +20,20 @@ model:
     name: 'base'
     encoders:
       tokens:
-        name: 'bert'
-        config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
-        vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
-        ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
-        namespace: 'tokens'
+        name: 'elmo'
+        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        namespace: 'elmo_characters'
       labels:
         name: 'one_hot'
         n_values: 2
   optimizer:
     name: 'adam'
-    learning_rate: 0.001
+    embedding_trainable: "True"
+    learning_rate: 0.00001
     warmup_proportion: 0.1
 run_config:
-  model_dir: './outputs/esim_bert/'
+  model_dir: './outputs/esim_esim_elmo/'
 hparams:
   train_steps: 1000000
   eval_steps: 100

@@ -21,18 +21,19 @@ model:
     encoders:
       tokens:
         name: 'elmo'
-        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
-        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        config_file: '../data/elmo/options.json'
+        ckpt_to_initialize_from: "../data/elmo/"
         namespace: 'elmo_characters'
       labels:
         name: 'one_hot'
         n_values: 2
   optimizer:
     name: 'adam'
-    learning_rate: 0.001
+    embedding_trainable: "False"
+    learning_rate: 0.0001
     warmup_proportion: 0.1
 run_config:
-  model_dir: './outputs/esim_elmo/'
+  model_dir: './outputs/esim_esim_elmo/'
 hparams:
   train_steps: 1000000
   eval_steps: 100
