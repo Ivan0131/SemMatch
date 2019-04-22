@@ -26,13 +26,13 @@ class Predict(Command):
             vocab = data_reader.get_vocab()
         else:
             self._pred_input_fn = pred_input_fn
-        self.saved_model_loader = loader_impl.SavedModelLoader(export_dir)
 
         dataset = self._pred_input_fn()
         iterator = dataset.make_initializable_iterator()
         dataset.make_initializable_iterator()
         next_element = iterator.get_next()
 
+        self.saved_model_loader = loader_impl.SavedModelLoader(export_dir)
         mode = DataSplit.PREDICT
         signature_def = get_signature_def_for_mode(self.saved_model_loader, mode)
 
@@ -51,11 +51,13 @@ class Predict(Command):
 
 
         #####xlsx wirte######
-        wb = Workbook(write_only=True)
-        ws = wb.create_sheet('examples')
-        ws.append(['index', 'question', 'answer', 'predict', 'score'])
-
-        #total_num = 0
+        # wb = Workbook(write_only=True)
+        # ws = wb.create_sheet('examples')
+        # ws.append(['index', 'question', 'answer', 'predict', 'score'])
+        csv_file = open(output_file, 'w', encoding="utf-8")
+        csv_file.write("\t".join(["index", "prediction"]) + "\n")
+        #csv_file.write("\t".join(["index", "premise", "hypothesis", "prediction", "prob"])+"\n")
+        total_num = 0
         #accuracy = 0
         #confusion_matrix = [[0 for j in range(num_classes)] for i in range(num_classes)]
 
@@ -69,14 +71,22 @@ class Predict(Command):
                     output_vals = sess.run(outputs)
 
                     data_batch = output_vals['inputs']
-                    index_val, premise_tokens_val, hypothesis_tokens_val = \
-                        data_batch['index/index'], data_batch['premise/tokens'], data_batch['hypothesis/tokens']
+                    if "index/inde" in data_batch:
+                        index_val, premise_tokens_val, hypothesis_tokens_val = \
+                            data_batch['index/index'], data_batch['premise/tokens'], data_batch['hypothesis/tokens']
+                        indexs = [str(index, 'utf-8') for index in index_val]
+                    else:
+                        premise_tokens_val, hypothesis_tokens_val = \
+                            data_batch['premise/tokens'], data_batch['hypothesis/tokens']
+                        index_val = list(range(total_num, total_num+hypothesis_tokens_val.shape[0]))
+                        indexs = [str(index) for index in index_val]
                     probs = output_vals['output']
                     num_batch = probs.shape[0]
                     #######################
-                    predictions = probs
-                    indexs = [str(index, 'utf-8') for index in index_val]
-                    #total_num += num_batch
+                    predictions = probs #np.argmax(probs, axis=1)
+                    #predictions = (probs > 0.5).astype(np.int32)
+                    total_num += num_batch
+                    logger.info("processing %s/%s" % (num_batch, total_num))
 
                     # for i in range(probs.shape[0]):
                     #     predictions = (probs > 0.5).astype(np.int32)
@@ -94,13 +104,17 @@ class Predict(Command):
                         predict = predictions[i]
                         prob = probs[i]
                         index = indexs[i]
-                        ws.append([index, premise_str, hypothesis_str, str(predict), str(prob)])
+                        #csv_str = "\t".join([index, premise_str, hypothesis_str, str(predict), str(prob)])+"\n"
+                        csv_str = "\t".join([index, str(predict)]) + "\n"
+                        csv_file.write(csv_str)
+                        #ws.append([index, premise_str, hypothesis_str, str(predict), str(prob)])
                     #print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
                 except tf.errors.OutOfRangeError as e:
-                    if output_file:
-                        if not output_file.endswith(".xlsx"):
-                            output_file += '.xlsx'
-                        wb.save(output_file)
+                    # if output_file:
+                    #     if not output_file.endswith(".xlsx"):
+                    #         output_file += '.xlsx'
+                    #     wb.save(output_file)
+                    csv_file.close()
                     break
 
     def generate_input_map(self, signature_def, features, labels=None):

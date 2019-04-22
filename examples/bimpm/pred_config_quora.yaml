@@ -1,0 +1,15 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  batch_size: 256
+  test_filename: "test.tsv"
+  tmp_path: "../data/quora/glove_bimpm"
+  token_indexers:
+    tokens:
+      name: "single_id"
+    chars:
+      name: "chars"
+      max_word_length: 10
+
+export_dir: './outputs/bimpm_glove_quora/export/best_exporter/1555442372'
+output_file: "pred_report.csv"

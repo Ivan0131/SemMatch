@@ -28,9 +28,11 @@ model:
         namespace: 'labels'
   optimizer:
     name: 'adagrad'
-    learning_rate: 0.06
+    learning_rate: 0.085
 run_config:
   model_dir: './outputs/abcnn_glove_mrpc/'
+  save_summary_steps: 100
+  save_checkpoints_steps: 100
 hparams:
   eval_steps: 500
   early_stopping_max_steps_without_decrease: 100000

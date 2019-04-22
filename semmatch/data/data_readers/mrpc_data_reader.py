@@ -58,7 +58,10 @@ class MRPCDataReader(data_reader.DataReader):
                     if (mode == DataSplit.TRAIN and [id1, id2] not in dev_ids) \
                         or (mode == DataSplit.EVAL and [id1, id2] in dev_ids) \
                         or mode == DataSplit.PREDICT or mode == DataSplit.TEST:
-                        inputs = [[s1, s2], [s2, s1]]
+                        if mode == DataSplit.TRAIN:
+                            inputs = [[s1, s2], [s2, s1]]
+                        else:
+                            inputs = [[s1, s2]]
                         for inp in inputs:
                             example = {
                                 "premise": inp[0],

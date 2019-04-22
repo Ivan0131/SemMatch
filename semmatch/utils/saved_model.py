@@ -13,6 +13,32 @@ from tensorflow.python.saved_model.loader_impl import _parse_saved_model, _get_a
 from tensorflow.python.util import compat
 
 
+def generate_input_map(signature_def, features, labels=None):
+    features_mapping = {"input_query": "premise/tokens", "input_title": "hypothesis/tokens"}
+    inputs = signature_def.inputs
+    input_map = {}
+    for (key, tensor_info) in inputs.items():
+        input_name = tensor_info.name
+        if ':' in input_name:
+            input_name = input_name[:input_name.find(':')]
+        control_dependency_name = '^' + input_name
+        if features_mapping is not None and key in features_mapping:
+            feature_key = features_mapping[key]
+        else:
+            feature_key = key
+        if feature_key in features:
+            check_same_dtype_and_shape(features[feature_key], tensor_info, key)
+            input_map[input_name] = input_map[control_dependency_name] = features[feature_key]
+        elif labels is not None and feature_key in labels:
+            check_same_dtype_and_shape(labels[feature_key], tensor_info, key)
+            input_map[input_name] = input_map[control_dependency_name] = labels[feature_key]
+        else:
+            raise ValueError(
+                'Key \"%s\" not found in features or labels passed in to the model '
+                'function. All required keys: %s' % (feature_key, inputs.keys()))
+    return input_map
+
+
 def check_same_dtype_and_shape(tensor, tensor_info, name):
   """Validate that tensor has the same properties as the TensorInfo proto.
   Args:

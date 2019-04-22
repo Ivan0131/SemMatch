@@ -35,6 +35,7 @@ class QuoraDataReader(data_reader.DataReader):
     def _read(self, mode: str):
         qqp_dir = self._maybe_download_corpora(self._data_path)
         filename = self.get_filename_by_mode(mode)
+        print(filename)
         if filename:
             filename = os.path.join(qqp_dir, filename)
             for example in self.example_generator(filename, mode):
@@ -59,18 +60,25 @@ class QuoraDataReader(data_reader.DataReader):
             if idx == 0: continue  # skip header
             line = line.strip().decode("utf-8")
             split_line = line.split("\t")
-            if len(split_line) < 6:
+            # if len(split_line) < 6:
+            #     skipped += 1
+            #     tf.logging.info("Skipping %d" % skipped)
+            #     continue
+            if len(split_line) == 6: #mode in [DataSplit.TRAIN, DataSplit.EVAL]:
+                s1, s2, l = split_line[3:]
+                index = split_line[0]
+            elif len(split_line) == 3:
+                index, s1, s2 = split_line
+            else:
                 skipped += 1
                 tf.logging.info("Skipping %d" % skipped)
                 continue
-            if mode in [DataSplit.TRAIN, DataSplit.EVAL]:
-                s1, s2, l = split_line[3:]
-                index = split_line[0]
-            else:
-                index, s1, s2 = split_line
             # A neat data augmentation trick from Radford et al. (2018)
             # https://blog.openai.com/language-unsupervised/
-            inputs = [[s1, s2], [s2, s1]]
+            if mode  == DataSplit.TRAIN:
+                inputs = [[s1, s2], [s2, s1]]
+            else:
+                inputs = [[s1, s2]]
             for inp in inputs:
                 if mode in [DataSplit.TRAIN, DataSplit.EVAL]:
                     example = {

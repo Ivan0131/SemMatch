@@ -2,7 +2,7 @@ import os
 import six
 import random
 import collections
-from typing import Dict
+from typing import Dict, List
 import tensorflow as tf
 from semmatch.data import vocabulary
 from semmatch.utils.logger import logger
@@ -143,6 +143,7 @@ class DataReader(InitFromParams):
         dataset = self.dataset(features, mode, num_threads=num_threads)
         if force_repeat or is_training:
             dataset = dataset.repeat()
+            print("dataset repeat")
         dataset = dataset.map(
             cast_ints_to_int32, num_parallel_calls=num_threads)
         #dataset = dataset.batch(batch_size)
@@ -195,6 +196,8 @@ class DataReader(InitFromParams):
         num_shards = self._get_num_shards(mode)
         filename = self.get_filename_by_mode(mode)
         if filename:
+            if isinstance(filename, List):
+                filename = filename[0]
             basefilename = os.path.splitext(os.path.basename(filename))[0]
             for i in range(num_shards):
                 filename = "%s_%s_%s_of_%s.tfrecord"%(self._data_name, basefilename, i, num_shards)

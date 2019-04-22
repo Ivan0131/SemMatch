@@ -6,7 +6,7 @@ from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch.modules.embeddings import EmbeddingMapping
-# from tensorflow.python import debug as tf_debug
+#from tensorflow.python import debug as tf_debug
 
 
 @register.register("model")
@@ -34,7 +34,7 @@ class Model(InitFromParams):
                 if 'loss' not in output_dict:
                     raise ModelError("Please provide loss in the model outputs for %s dataset."%mode)
                 train_op, optimizer_hooks = self._optimizer.get_train_op(output_dict['loss'], params)
-                # optimizer_hooks.append(tf_debug.LocalCLIDebugHook())
+                #optimizer_hooks.append(tf_debug.LocalCLIDebugHook())
                 ##########
                 if 'debugs' in output_dict:
                     tvars = output_dict['debugs'] #tf.trainable_variables()

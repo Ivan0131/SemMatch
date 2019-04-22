@@ -12,7 +12,8 @@ from semmatch import nn
 @register.register_subclass('model', 'decomp_attn')
 class DecomposableAttention(Model):
     #Model diverged with loss = NaN.
-    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(), hidden_dim: int = 300, keep_prob:float = 0.5,
+    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
+                 hidden_dim: int = 200, keep_prob:float = 0.8,
                  model_name: str = 'bilstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
@@ -59,25 +60,10 @@ class DecomposableAttention(Model):
                 F_b_bar = self._feedForwardBlock(hypothesis_tokens, self._hidden_dim, 'F', isReuse=True)
 
                 # e_i,j = F'(a_hat, b_hat) = F(a_hat).T * F(b_hat) (1)
-                e_raw = tf.matmul(F_a_bar, tf.transpose(F_b_bar, [0, 2, 1]))
-                # mask padding sequence
-                mask = tf.multiply(tf.expand_dims(prem_mask, 2), tf.expand_dims(hyp_mask, 1))
-                e = tf.multiply(e_raw, mask)
-
-                attentionSoft_a = tf.exp(e - tf.reduce_max(e, axis=2, keepdims=True))
-                attentionSoft_b = tf.exp(e - tf.reduce_max(e, axis=1, keepdims=True))
-                # mask attention weights
-                attentionSoft_a = tf.multiply(attentionSoft_a, tf.expand_dims(hyp_mask, 1))
-                attentionSoft_b = tf.multiply(attentionSoft_b, tf.expand_dims(prem_mask, 2))
-                attentionSoft_a = tf.divide(attentionSoft_a, tf.reduce_sum(attentionSoft_a, axis=2, keepdims=True))
-                attentionSoft_b = tf.divide(attentionSoft_b, tf.reduce_sum(attentionSoft_b, axis=1, keepdims=True))
-                attentionSoft_a = tf.multiply(attentionSoft_a, mask)
-                attentionSoft_b = tf.transpose(tf.multiply(attentionSoft_b, mask), [0, 2, 1])
-
-                # beta = \sum_{j=1}^l_b \frac{\exp(e_{i,j})}{\sum_{k=1}^l_b \exp(e_{i,k})} * b_hat_j
-                # alpha = \sum_{i=1}^l_a \frac{\exp(e_{i,j})}{\sum_{k=1}^l_a \exp(e_{k,j})} * a_hat_i (2)
-                beta = tf.matmul(attentionSoft_b, premise_tokens)
-                alpha = tf.matmul(attentionSoft_a, hypothesis_tokens)
+                #alignment_attention = Attention(self.hidden_size, self.hidden_size)
+                #alpha = alignment_attention(F_b_bar, F_a_bar, keys_mask=self.query_mask)
+                #beta = alignment_attention(F_a_bar, F_b_bar, keys_mask=self.doc_mask)
+                alpha, beta = nn.bi_uni_attention(F_a_bar, F_b_bar, query_len=prem_seq_lengths, key_len=hyp_seq_lengths)
 
             with tf.variable_scope("Compare"):
                 a_beta = tf.concat([premise_tokens, alpha], axis=2)
@@ -117,7 +103,7 @@ class DecomposableAttention(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                #metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [tf.shape(hypothesis_tokens), tf.shape(premise_tokens),
                 #                          tf.shape(alpha), tf.shape(beta)]

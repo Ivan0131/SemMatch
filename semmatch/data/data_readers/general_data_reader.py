@@ -46,6 +46,17 @@ class GeneralDataReader(data_reader.DataReader):
                         for (field_tar, field_src) in self._field_mapping.items():
                             example[field_tar] = fields[field_src]
                         yield self._process(example)
+            if file_path.lower().endswith("csv"):
+                if self._field_mapping is None:
+                    raise ConfigureError("field mapping is not provided for csv file.")
+                with open(file_path, 'r') as csv_file:
+                    logger.info("Reading instances from csv dataset at: %s", file_path)
+                    for line in csv_file:
+                        fields = line.strip().split("\t")
+                        example = {}
+                        for (field_tar, field_src) in self._field_mapping.items():
+                            example[field_tar] = fields[int(field_src)]
+                        yield self._process(example)
         else:
             return None
 

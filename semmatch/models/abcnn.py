@@ -10,11 +10,12 @@ import numpy as np
 
 #ABCNN: Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
 #https://arxiv.org/abs/1512.05193
+#to do 这论文是个坑 之后再调
 @register.register_subclass('model', 'abcnn')
 class ABCNN(Model):
     #debug NaN loss during training.
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 50, model_type: str = "ABCNN3", kernel_size: int = 4, max_length: int = 40,
+                 hidden_dim: int = 50, model_type: str = "ABCNN3", kernel_size: int = 7, max_length: int = 40,
                  num_layers: int = 2, model_name: str = 'abcnn'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping

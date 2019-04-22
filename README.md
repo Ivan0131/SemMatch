@@ -1,3 +1,25 @@
+## 模型评估
+对比原文效果
+
+| Model | Dataset | Original Paper | Our Implement|
+| :------: | :------: | :------: | :------: |
+| esim | Multinli Test Match | 72.3% (Accuracy) | 72.6%|
+| bimpm (not using the same version of quora) | Quora Dev| 88.69% (Accuracy)| 86.3% |
+| decomposable attention |SNLI Test| 86.3% (Accuracy)| 84.0%|
+
+Multinli数据集 Accuracy
+
+| Model | Dev Match | Dev Mismatch | Test Match | Test Mismatch| 
+| :------: | :------: | :------: | :------: | :------: | 
+| esim | 72.6 | 73.3 | 73.1 | 72.6 |
+
+Quora数据集 F1-Score/Accuracy
+
+| Model | Dev | Test |
+| :------: | :------: | :------: |
+|esim | 80.5/84.3  | 60.5/81.5 |
+|bimpm | 82.3/86.3 | 62.8/84.0 | 
+
 ## INSTALL
 ```
 git clone https://git.sogou-inc.com/hangzhou_research/SemMatch.git
@@ -227,13 +249,6 @@ class BiLSTM(Model):
             return output_dict
 ```
 `@register.register_subclass`在`model`中注册了`text_matching_bilstm `。初始化函数中主要包含两个模块`EmbeddingMapping`和`Optimizer`。主要具体实现一个函数`forward`，返回一个output\_dict。output\_dict为一个字典，包含`tf.estimator.EstimatorSpec`所需要的参数，例如：loss、metrics、predictions等。`features_embedding = self._embedding_mapping.forward(features, labels, mode, params)`是通过embedding将输入数据进行编码，例如将词根据词向量进行编码，对标签根据one hot进行编码。
-
-## 模型评估
-Multinli数据集 Accuracy
-
-| Model | Dev Match | Dev Mismatch | Test Match | Test Mismatch| 
-| :------: | :------: | :------: | :------: | :------: | 
-| esim | 72.6% | 73.3 | 73.1% | 72.6% |
 
 ## to do list
 * Tokenizer扩充，目前只是正则匹配的英文分词，可以添加已经分好词的输入数据（由空格分开）的分词处理，nltk，jieba分词，中英文分词的处理

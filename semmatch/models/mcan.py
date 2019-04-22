@@ -13,12 +13,13 @@ from semmatch import nn
 class MCAN(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
                  hidden_dim: int = 100, keep_prob: float = 0.8,
-                 model_name: str = 'bilstm'):
+                 model_name: str = 'mcan'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
         self._drop_rate = 1 - keep_prob
+        self._eps = 1e-15
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -60,6 +61,8 @@ class MCAN(Model):
             doc_emb = hypothesis_tokens
             query_len = prem_seq_lengths
             doc_len = hyp_seq_lengths
+            query_mask = prem_mask
+            doc_mask = hyp_mask
             project_dim = premise_tokens.shape[-1].value
             query_length = tf.shape(premise_tokens)[1]
             doc_length = tf.shape(hypothesis_tokens)[1]
@@ -73,22 +76,27 @@ class MCAN(Model):
             M = tf.Variable(tf.random_normal([project_dim, project_dim], stddev=0.1))
             tmp = tf.einsum("ijk,kl->ijl", query_output, M)
             S = tf.matmul(tmp, doc_output, transpose_b=True)  # [batch, q, d]
+            S_mask = tf.matmul(query_mask, doc_mask, transpose_b=True)
+            S_mean = S * S_mask #
+            S_align_max = S + (1. - S_mask) * tf.float32.min
+
             # 2.2.1 Extractive Pooling
             # Max Pooling
-            query_score = tf.nn.softmax(tf.reduce_max(S, axis=2, keepdims=True), axis=1)
-            query_maxpooling = tf.reduce_sum(query_score * query_output, axis=1)  # [batch, r]
-            doc_score = tf.nn.softmax(tf.reduce_max(S, axis=1, keepdims=True), axis=2)
-            doc_maxpooling = tf.reduce_sum(tf.transpose(doc_score, [0, 2, 1]) * doc_output, axis=1)  # [batch, r]
+            query_score = tf.nn.softmax(tf.reduce_max(S_align_max, axis=2, keepdims=True), axis=1)
+            query_maxpooling = tf.reduce_sum(query_score * query_output, axis=1) # [batch, r]
+
+            doc_score = tf.nn.softmax(tf.reduce_max(S_align_max, axis=1, keepdims=True), axis=2)
+            doc_maxpooling = tf.reduce_sum(tf.transpose(doc_score, [0, 2, 1]) * doc_output, axis=1) # [batch, r]
 
             # Mean Pooling
-            query_score = tf.nn.softmax(tf.reduce_max(S, axis=2, keepdims=True), axis=1)
-            query_meanpooling = tf.reduce_mean(query_score * query_output, axis=1)  # [batch, r]
-            doc_score = tf.nn.softmax(tf.reduce_mean(S, axis=1, keepdims=True), axis=2)
+            query_score = tf.nn.softmax(tf.reduce_sum(S_mean, axis=2, keepdims=True)/(tf.expand_dims(tf.expand_dims(tf.cast(doc_len, tf.float32)+self._eps, -1), -1)), axis=1)
+            query_meanpooling = tf.reduce_sum(query_score * query_output, axis=1)  # [batch, r]
+            doc_score = tf.nn.softmax(tf.reduce_sum(S_mean, axis=1, keepdims=True)/(tf.expand_dims(tf.expand_dims(tf.cast(query_len, tf.float32)+self._eps, -1), -1)), axis=2)
             doc_meanpooling = tf.reduce_sum(tf.transpose(doc_score, [0, 2, 1]) * doc_output, axis=1)  # [batch, r]
 
             # 2.2.2 Alignment Pooling
-            query_alignment = tf.matmul(tf.nn.softmax(S, axis=2), doc_output)  # [batch, q, r]
-            doc_alignment = tf.matmul(tf.nn.softmax(S, axis=1), query_output, transpose_a=True)  # [batch, d, r]
+            query_alignment = tf.matmul(tf.nn.softmax(S_align_max, axis=2), doc_output)  # [batch, q, r]
+            doc_alignment = tf.matmul(tf.nn.softmax(S_align_max, axis=1), query_output, transpose_a=True)  # [batch, d, r]
 
             # 2.2.3 Intra Attention
             query_selfattn = nn.self_attention(query_output, query_len)
@@ -100,23 +108,33 @@ class MCAN(Model):
             doc_maxpooling = tf.tile(tf.expand_dims(doc_maxpooling, axis=1), [1, doc_length, 1])
             doc_meanpooling = tf.tile(tf.expand_dims(doc_meanpooling, axis=1), [1, doc_length, 1])
 
-            query_max_fc, query_max_fm, query_max_fs = self.cast_attention(query_maxpooling, query_emb)
-            query_mean_fc, query_mean_fm, query_mean_fs = self.cast_attention(query_meanpooling, query_emb)
-            query_align_fcm, query_align_fm, query_align_fs = self.cast_attention(query_alignment, query_emb)
-            query_selfattn_fc, query_selfattn_fm, query_selfattn_fs = self.cast_attention(query_selfattn, query_emb)
+            query_max_fc, query_max_fm, query_max_fs = self.cast_attention(query_maxpooling, query_emb, self.nn_fc, name="query_max_pooling")
+            query_mean_fc, query_mean_fm, query_mean_fs = self.cast_attention(query_meanpooling, query_emb, self.nn_fc, name="query_mean_pooling")
+            query_align_fcm, query_align_fm, query_align_fs = self.cast_attention(query_alignment, query_emb, self.nn_fc, name="query_align_pooling")
+            query_selfattn_fc, query_selfattn_fm, query_selfattn_fs = self.cast_attention(query_selfattn, query_emb, self.nn_fc, name="query_self_pooling")
 
-            doc_max_fc, doc_max_fm, doc_max_fs = self.cast_attention(doc_maxpooling, doc_emb)
-            doc_mean_fc, doc_mean_fm, doc_mean_fs = self.cast_attention(doc_meanpooling, doc_emb)
-            doc_align_fcm, doc_align_fm, doc_align_fs = self.cast_attention(doc_alignment, doc_emb)
-            doc_selfattn_fc, doc_selfattn_fm, doc_selfattn_fs = self.cast_attention(doc_selfattn, doc_emb)
+            doc_max_fc, doc_max_fm, doc_max_fs = self.cast_attention(doc_maxpooling, doc_emb, self.nn_fc, name="doc_max_pooling")
+            doc_mean_fc, doc_mean_fm, doc_mean_fs = self.cast_attention(doc_meanpooling, doc_emb, self.nn_fc, name="doc_mean_pooling")
+            doc_align_fcm, doc_align_fm, doc_align_fs = self.cast_attention(doc_alignment, doc_emb, self.nn_fc, name="doc_align_pooling")
+            doc_selfattn_fc, doc_selfattn_fm, doc_selfattn_fs = self.cast_attention(doc_selfattn, doc_emb, self.nn_fc, name="doc_self_pooling")
+
+            # query_cast = tf.concat(
+            #     [query_max_fc, query_max_fm, query_max_fs, query_mean_fc, query_mean_fm, query_mean_fs, query_align_fcm,
+            #      query_align_fm, query_align_fs, query_selfattn_fc, query_selfattn_fm, query_selfattn_fs, query_output],
+            #     axis=2)
+            # doc_cast = tf.concat(
+            #     [doc_max_fc, doc_max_fm, doc_max_fs, doc_mean_fc, doc_mean_fm, doc_mean_fs, doc_align_fcm,
+            #      doc_align_fm, doc_align_fs, doc_selfattn_fc, doc_selfattn_fm, doc_selfattn_fs, doc_output], axis=2)
 
             query_cast = tf.concat(
-                [query_max_fc, query_max_fm, query_max_fs, query_mean_fc, query_mean_fm, query_mean_fs, query_align_fcm,
-                 query_align_fm, query_align_fs, query_selfattn_fc, query_selfattn_fm, query_selfattn_fs, query_output],
+                [
+                 query_output],
                 axis=2)
             doc_cast = tf.concat(
-                [doc_max_fc, doc_max_fm, doc_max_fs, doc_mean_fc, doc_mean_fm, doc_mean_fs, doc_align_fcm,
-                 doc_align_fm, doc_align_fs, doc_selfattn_fc, doc_selfattn_fm, doc_selfattn_fs, doc_output], axis=2)
+                [doc_output], axis=2)
+
+            query_cast = tf.layers.dropout(query_cast, self._drop_rate, training=is_training)
+            doc_cast = tf.layers.dropout(doc_cast, self._drop_rate, training=is_training)
 
             query_hidden, _ = nn.lstm(query_cast, self._hidden_dim, name="query_lstm")
             doc_hidden, _ = nn.lstm(doc_cast, self._hidden_dim, name="doc_lstm")
@@ -158,7 +176,6 @@ class MCAN(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = []
                 # debug_ops = [query_mean_fs]#[query_maxpooling, query_max_fc] [query_max_fm, query_max_fs],[query_mean_fc, query_mean_fm] , ,
@@ -167,17 +184,21 @@ class MCAN(Model):
                 # output_dict['debugs'].append(query_length)
             return output_dict
 
-    def cast_attention(self, x, y):
-        fc = self.nn_fc(tf.concat([x, y], axis=2))
-        fm = self.nn_fc(tf.multiply(x, y))
-        fs = self.nn_fc(tf.subtract(x, y))
+    def cast_attention(self, x, y, func, name="cast_attention"):
+        with tf.variable_scope(name):
+            fc = self.nn_fc(tf.concat([x, y], axis=2))
+            fm = self.nn_fc(tf.multiply(x, y))
+            fs = self.nn_fc(tf.subtract(x, y))
+            fc = func(fc, name="fc")
+            fm = func(fm, name="fm")
+            fs = func(fs, name="fm")
         return fc, fm, fs
 
     def sum_fc(self, x):
         return tf.reduce_sum(x, axis=-1, keepdim=True)
 
-    def nn_fc(self, x):
-        return tf.layers.Dense(1, activation=tf.nn.relu, use_bias=True)(x)
+    def nn_fc(self, x, name="nn_fc"):
+        return tf.layers.Dense(1, activation=tf.nn.relu, use_bias=True, name=name)(x)
 
     # def fm_fc(self, x):
     #     element_wise_product_list = []

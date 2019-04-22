@@ -1,14 +1,13 @@
 data:
-  name: "quora" # or quora_data_reader
-  data_path: '../data/quora'
+  name: "datarliving" # or quora_data_reader
+  data_path: '../data/datarliving'
   batch_size: 32
-  tmp_path: "../data/quora/glove_new"
+  tmp_path: "../data/datarliving/glove_tokens"
 
 model:
-  name: 'esim'
-  num_classes: 2
-  hidden_dim: 300
-  keep_prob: 0.5
+  name: 'mcan'
+  num_classes: 3
+  keep_prob: 1.0
   embedding_mapping:
     name: 'base'
     encoders:
@@ -17,21 +16,20 @@ model:
         embedding_dim: 300
         trainable: "False"
         pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/esim_glove_quora/embedding"
+        tmp_dir: "./outputs/mcan_glove_datarliving/embedding"
         namespace: 'tokens'
-        keep_prob: 0.5
-
+        keep_prob: 1.0
       labels:
         name: 'one_hot'
-        n_values: 2
+        n_values: 3
         namespace: 'labels'
   optimizer:
     name: 'adam'
-    learning_rate: 0.0004
+    learning_rate: 0.0003
 run_config:
-  model_dir: './outputs/esim_glove_quora/'
+  model_dir: './outputs/mcan_glove_datarliving/'
 hparams:
-  eval_steps: 1264
+  eval_steps: 80
   early_stopping_max_steps_without_decrease: 200000
   early_stopping_min_steps: 20000
 

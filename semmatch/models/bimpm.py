@@ -279,8 +279,9 @@ class BIMPM(Model):
                                             bias_initializer=tf.constant_initializer(value=0.0, dtype=tf.float32))
 
             predictions = tf.argmax(logits, axis=-1)
+            probs = tf.nn.softmax(logits, axis=-1)
 
-            output_dict = {'logits': logits, 'predictions': predictions}
+            output_dict = {'logits': logits, 'predictions': probs}
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:

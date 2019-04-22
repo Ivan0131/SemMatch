@@ -9,7 +9,7 @@ from openpyxl import Workbook
 import numpy as np
 from tensorflow.python.estimator import model_fn
 from semmatch.utils.saved_model import get_meta_graph_def_for_mode, get_signature_def_for_mode, \
-    check_same_dtype_and_shape
+    check_same_dtype_and_shape, generate_input_map
 from sklearn import metrics
 
 
@@ -25,17 +25,18 @@ class Evaluate(Command):
             vocab = data_reader.get_vocab()
         else:
             self._eval_input_fn = eval_input_fn
-        self.saved_model_loader = loader_impl.SavedModelLoader(export_dir)
 
         dataset = self._eval_input_fn()
         iterator = dataset.make_initializable_iterator()
         dataset.make_initializable_iterator()
         next_element = iterator.get_next()
 
+        self.saved_model_loader = loader_impl.SavedModelLoader(export_dir)
+
         mode = DataSplit.PREDICT
         signature_def = get_signature_def_for_mode(self.saved_model_loader, mode)
 
-        input_map = self.generate_input_map(signature_def, next_element)
+        input_map = generate_input_map(signature_def, next_element)
         output_tensor_names = [
             value.name for value in signature_def.outputs.values()]
         try:
@@ -82,10 +83,12 @@ class Evaluate(Command):
                     total_num += num_batch
                     print("processing %s/%s"%(num_batch, total_num))
                     #######################
-                    predictions = probs
+                    predictions = probs #np.argmax(probs, axis=1)
+                    #predictions = (probs > 0.5).astype(np.int32)
+                    #print(predictions)
                     y_true.append(true_label_val)
                     y_pred.append(predictions)
-
+                    #print(predictions)
                     # for i in range(probs.shape[0]):
                     #     predictions = (probs > 0.5).astype(np.int32)
                     #     predict = predictions[i]
@@ -149,31 +152,6 @@ class Evaluate(Command):
                             output_file += '.xlsx'
                         wb.save(output_file)
                     break
-
-    def generate_input_map(self, signature_def, features, labels=None):
-        features_mapping = {"input_query": "premise/tokens", "input_title": "hypothesis/tokens"}
-        inputs = signature_def.inputs
-        input_map = {}
-        for (key, tensor_info) in inputs.items():
-            input_name = tensor_info.name
-            if ':' in input_name:
-                input_name = input_name[:input_name.find(':')]
-            control_dependency_name = '^' + input_name
-            if features_mapping is not None and key in features_mapping:
-                feature_key = features_mapping[key]
-            else:
-                feature_key = key
-            if feature_key in features:
-                check_same_dtype_and_shape(features[feature_key], tensor_info, key)
-                input_map[input_name] = input_map[control_dependency_name] = features[feature_key]
-            elif labels is not None and feature_key in labels:
-                check_same_dtype_and_shape(labels[feature_key], tensor_info, key)
-                input_map[input_name] = input_map[control_dependency_name] = labels[feature_key]
-            else:
-                raise ValueError(
-                    'Key \"%s\" not found in features or labels passed in to the model '
-                    'function. All required keys: %s' % (feature_key, inputs.keys()))
-        return input_map
 
     @classmethod
     def init_from_params(cls, params):

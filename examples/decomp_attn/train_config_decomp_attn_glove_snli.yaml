@@ -9,8 +9,7 @@ data:
 
 model:
   name: 'decomp_attn'
-  num_classes: 2
-  hidden_dim: 50
+  num_classes: 3
   embedding_mapping:
     name: 'base'
     encoders:
@@ -19,21 +18,21 @@ model:
         embedding_dim: 300
         trainable: "False"
         pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/decomp_attn_glove_quora/embedding"
+        tmp_dir: "./outputs/decomp_attn_glove_snli/embedding"
         namespace: 'tokens'
       labels:
         name: 'one_hot'
-        n_values: 2
+        n_values: 3
         namespace: 'labels'
   optimizer:
-    name: 'adam'
-    learning_rate: 0.001
+    name: 'adagrad'
+    learning_rate: 0.05
 run_config:
-  model_dir: './outputs/decomp_attn_glove_quora/'
+  model_dir: './outputs/decomp_attn_glove_snli/'
 hparams:
-  eval_steps: 1264
-  early_stopping_max_steps_without_decrease: 10000
-  early_stopping_min_steps: 1000
+  eval_steps: 314
+  early_stopping_max_steps_without_decrease: 10000000
+  early_stopping_min_steps: 1000000
 
 
 

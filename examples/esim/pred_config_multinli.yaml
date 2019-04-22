@@ -6,4 +6,4 @@ data:
   tmp_path: "../data/mnli/glove"
 
 export_dir: './outputs/esim_glove_mnli/export/best_exporter/1553251548'
-output_file: "pred_report.xlsx"
+output_file: "pred_report.csv"

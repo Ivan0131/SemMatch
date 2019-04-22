@@ -41,9 +41,9 @@ model:
 run_config:
   model_dir: './outputs/bimpm_glove_quora/'
 hparams:
-  eval_steps: 500
-  early_stopping_max_steps_without_decrease: 100000
-  early_stopping_min_steps: 10000
+  eval_steps: 1264
+  early_stopping_max_steps_without_decrease: 400000
+  early_stopping_min_steps: 40000
 
 
 
