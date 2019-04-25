@@ -87,21 +87,28 @@ def fuse_gate(lhs, rhs, initializer_range=0.02, self_att_fuse_gate_residual_conn
     with tf.variable_scope(scope):
         dim = lhs.get_shape().as_list()[-1]
 
-        lrhs = tf.concat([lhs, rhs], axis=-1)
-        lrhs_1 = tf.layers.dense(lrhs, dim, activation=None, name="lrhs_1",
+        lhs_1 = tf.layers.dense(lhs, dim, activation=None, name="lhs_1",
+                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+        rhs_1 = tf.layers.dense(rhs, dim, activation=None, name="rhs_1",
                                 kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
 
         if self_att_fuse_gate_residual_conn and self_att_fuse_gate_relu_z:
-            z = tf.nn.relu(lrhs_1)
+            z = tf.nn.relu(lhs_1+rhs_1)
         else:
-            z = tf.tanh(lrhs_1)
+            z = tf.tanh(lhs_1+rhs_1)
 
-        f = tf.layers.dense(lrhs, dim, activation=tf.nn.sigmoid, name="lrhs_2",
+        lhs_2 = tf.layers.dense(lhs, dim, activation=tf.nn.sigmoid, name="lhs_2",
                                 kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+        rhs_2 = tf.layers.dense(rhs, dim, activation=tf.nn.sigmoid, name="rhs_2",
+                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+        f = tf.sigmoid(lhs_2 + rhs_2)
 
         if two_gate_fuse_gate:
-            f2 = tf.layers.dense(lrhs, dim, activation=tf.nn.sigmoid, name="lrhs_3",
+            lhs_3 = tf.layers.dense(lhs, dim, activation=tf.nn.sigmoid, name="lhs_3",
                                 kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+            rhs_3 = tf.layers.dense(rhs, dim, activation=tf.nn.sigmoid, name="rhs_3",
+                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+            f2 = tf.sigmoid(lhs_3 + rhs_3)
             out = f * lhs + f2 * z
         else:
             out = f * lhs + (1 - f) * z

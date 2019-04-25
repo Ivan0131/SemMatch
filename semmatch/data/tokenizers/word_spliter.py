@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import nltk
 from typing import List
 from semmatch.data.tokenizers import Token
 from semmatch.utils import register
@@ -33,11 +34,19 @@ class WhiteWordSplitter(WordSplitter):
         return [Token(word.lower()) if self.do_lower_case else Token(word) for word in words]
 
 
+@register.register_subclass("word_splitter", "nltk_splitter")
+class NLTKSplitter(WordSplitter):
+    def split_words(self, sentence: str) -> List[Token]:
+        words = nltk.word_tokenize(sentence)
+        return [Token(word.lower()) if self.do_lower_case else Token(word) for word in words]
+
+
 @register.register_subclass("word_splitter", "char_splitter")
 class CharSplitter(WordSplitter):
     def split_words(self, sentence: str) -> List[Token]:
         words = [char for char in sentence]
         return [Token(word.lower()) if self.do_lower_case else Token(word) for word in words]
+
 
 @register.register_subclass("word_splitter", "bert_basic_splitter")
 class BertBasicSplitter(WordSplitter):

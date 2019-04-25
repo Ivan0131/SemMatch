@@ -6,3 +6,4 @@ from semmatch.models.bimpm import BIMPM
 from semmatch.models.abcnn import ABCNN
 from semmatch.models.decomp_attn import DecomposableAttention
 from semmatch.models.mcan import MCAN
+from semmatch.models.match_lstm import MatchLSTM

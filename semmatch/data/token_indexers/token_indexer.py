@@ -7,8 +7,12 @@ from semmatch.config.init_from_params import InitFromParams
 
 @register.register("token_indexer")
 class TokenIndexer(InitFromParams):
-    def __init__(self, namespace: str = 'tokens'):
+    def __init__(self, namespace: str, max_length: int = None):
         self._namespace = namespace
+        self._max_length = max_length
+
+    def set_max_length(self, max_length):
+        self._max_length = max_length
 
     def get_namespace(self):
         return self._namespace

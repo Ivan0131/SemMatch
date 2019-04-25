@@ -96,7 +96,7 @@ class BiLSTM(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                #metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,
                 #                          premise_ave, hypothesis_ave, diff, mul, h, h_mlp, logits]

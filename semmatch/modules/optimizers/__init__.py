@@ -4,3 +4,4 @@ from semmatch.modules.optimizers.sgd_optimizer import SGDOptimizer
 from semmatch.modules.optimizers.momentum_optimizer import MomentumOptimizer
 from semmatch.modules.optimizers.adam_accumulate_optimizer import AdamAccumulateOptimizer
 from semmatch.modules.optimizers.adagrad_optimizer import AdagradOptimizer
+from semmatch.modules.optimizers.adadelta_optimizer import AdadeltaOptimizer

@@ -1,6 +1,7 @@
 import tensorflow as tf
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.utils import register
+from semmatch.utils.logger import logger
 
 
 @register.register("optimizer")
@@ -13,18 +14,30 @@ class Optimizer(InitFromParams):
     def get_or_create_optimizer(self, params):
         raise NotImplementedError
 
-    def get_learning_rate(self, init_learning_rate, train_steps=None, warmup_proportion=None):
+    def get_learning_rate(self, init_learning_rate, train_steps=None, warmup_proportion=None, decay_steps=None,
+                          decay_rate=None, decay_type='polynomial'):
         global_step = tf.train.get_or_create_global_step()
         learning_rate = tf.constant(value=init_learning_rate, shape=[], dtype=tf.float32)
         num_train_steps = train_steps
-        if num_train_steps:
-            learning_rate = tf.train.polynomial_decay(
-                learning_rate,
-                global_step,
-                num_train_steps,
-                end_learning_rate=0.0,
-                power=1.0,
-                cycle=False)
+        if decay_type == 'polynomial':
+            if num_train_steps:
+                learning_rate = tf.train.polynomial_decay(
+                    learning_rate,
+                    global_step,
+                    num_train_steps,
+                    end_learning_rate=0.0,
+                    power=1.0,
+                    cycle=False)
+        elif decay_type == 'exponential':
+            if decay_steps and decay_rate:
+                learning_rate = tf.train.exponential_decay(
+                    learning_rate,
+                    global_step,
+                    decay_steps,
+                    decay_rate,
+                    staircase=False, name=None)
+        else:
+            logger.error("The decay type %s is not supported." % decay_type)
 
         if warmup_proportion and num_train_steps:
             num_warmup_steps = int(num_train_steps * self._warmup_proportion)

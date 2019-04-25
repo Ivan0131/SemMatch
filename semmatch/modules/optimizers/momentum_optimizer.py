@@ -9,6 +9,7 @@ from semmatch.modules.optimizers import Optimizer
 class MomentumOptimizer(Optimizer):
     def __init__(self, learning_rate: float = 0.0001, momentum: float = 0.9, use_nesterov: bool = False,
                  warmup_proportion: float = None,
+                 decay_steps: int = None, decay_rate: float = None, decay_type='polynomial',
                  embedding_learning_rate: float = None,
                  embedding_trainable: bool = True,
                  optimizer_name: str = 'adam_optimizer'):
@@ -23,14 +24,19 @@ class MomentumOptimizer(Optimizer):
             self._embedding_learning_rate = embedding_learning_rate
         self._model_optimizer = None
         self._embedding_optimizer = None
+        self._decay_steps = decay_steps
+        self._decay_rate = decay_rate
+        self._decay_type = decay_type
 
     def get_or_create_optimizer(self, params):
         if self._optimizer:
             return self._optimizer
         else:
-            learning_rate = self.get_learning_rate(self._learning_rate, params.train_steps, self._warmup_proportion)
+            learning_rate = self.get_learning_rate(self._learning_rate, params.train_steps, self._warmup_proportion,
+                                                   self._decay_steps, self._decay_rate, self._decay_type)
             embedding_learning_rate = self.get_learning_rate(self._embedding_learning_rate, params.train_steps,
-                                                             self._warmup_proportion)
+                                                             self._warmup_proportion, self._decay_steps,
+                                                             self._decay_rate, self._decay_type)
 
             self._model_optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate, momentum=self._momentum,
                                                                use_nesterov=self._use_nesterov,

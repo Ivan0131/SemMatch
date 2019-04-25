@@ -13,10 +13,11 @@ from semmatch import nn
 class DIIN(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
                  hidden_dim: int = 300, keep_prob: float = 1.0, dropout_decay_step: int = 10000,
+                 char_filter_sizes: str = "5", char_filter_channel_dims: str = "100",
                  dropout_decay_rate: float = 0.977, highway_num_layers: int = 2, num_self_att_enc_layers: int = 1,
                  first_scale_down_layer_relu: bool = False, dense_net_first_scale_down_ratio: float = 0.3,
                  first_scale_down_kernel: int = 1, dense_net_growth_rate: int = 20, num_dense_net_layers: int = 8,
-                 dense_net_kernel_size: int = 3, dense_net_transition_rate: float = 0.5,
+                 dense_net_kernel_size: int = 3, dense_net_transition_rate: float = 0.5, diff_penalty_loss_ratio: float = 1e-3,
                  model_name: str = 'diin'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
@@ -35,7 +36,9 @@ class DIIN(Model):
         self._num_dense_net_layers = num_dense_net_layers
         self._dense_net_kernel_size = dense_net_kernel_size
         self._dense_net_transition_rate = dense_net_transition_rate
-
+        self._char_filter_size = list(map(int, char_filter_sizes.split(',')))
+        self._char_filter_channel_dims = list(map(int, char_filter_channel_dims.split(',')))
+        self._diff_penalty_loss_ratio = diff_penalty_loss_ratio
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -76,6 +79,33 @@ class DIIN(Model):
 
             premise_ins.append(premise_tokens)
             hypothesis_ins.append(hypothesis_tokens)
+
+            premise_chars = features_embedding.get('premise/chars', None)
+            hypothesis_chars = features_embedding.get('hypothesis/chars', None)
+
+            with tf.variable_scope("conv") as scope:
+                conv_pre = nn.multi_conv1d_max(premise_chars, self._char_filter_size, self._char_filter_channel_dims,
+                                               "VALID", is_training, self._keep_prob, scope='conv')
+                scope.reuse_variables()
+                conv_hyp = nn.multi_conv1d_max(hypothesis_chars, self._char_filter_size, self._char_filter_channel_dims,
+                                               "VALID", is_training, self._keep_prob, scope='conv')
+                #conv_pre = tf.reshape(conv_pre, [-1, self.sequence_length, config.char_out_size])
+                #conv_hyp = tf.reshape(conv_hyp, [-1, self.sequence_length, config.char_out_size])
+
+            premise_ins.append(conv_pre)
+            hypothesis_ins.append(conv_hyp)
+
+            premise_pos = features_embedding.get('premise/pos_tags', None)
+            hypothesis_pos = features_embedding.get('hypothesis/pos_tags', None)
+
+            premise_ins.append(premise_pos)
+            hypothesis_ins.append(hypothesis_pos)
+
+            premise_exact_match = tf.cast(features.get('premise/exact_match_labels', None), tf.float32)
+            hypothesis_exact_match = tf.cast(features.get('hypothesis/exact_match_labels', None), tf.float32)
+
+            premise_ins.append(tf.expand_dims(premise_exact_match, -1))
+            hypothesis_ins.append(tf.expand_dims(hypothesis_exact_match, -1))
 
             global_step = tf.train.get_or_create_global_step()
             dropout_keep_rate = tf.train.exponential_decay(self._keep_prob, global_step,
@@ -149,7 +179,7 @@ class DIIN(Model):
                                                        scope='fourth_transition_layer')
 
                     shape_list = list(fm.get_shape())
-                    print(shape_list)
+                    #print(shape_list)
                     premise_final = tf.reshape(fm, [-1, shape_list[1] * shape_list[2] * shape_list[3]])
 
             logits = tf.layers.dense(premise_final, self._num_classes, activation=None, name="arg",
@@ -168,12 +198,63 @@ class DIIN(Model):
                 labels = features['label/labels']
 
                 loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
-                output_dict['loss'] = loss
+
+                ######diff loss###############################
+                diffs = []
+                for i in range(self._num_self_att_enc_layers):
+                    for tensor in tf.trainable_variables():
+                        #print(tensor.name)
+                        if tensor.name == "diin/prepro/attention_encoder_{}/premise_self_attention/similar_mat/similar_func/arg/kernel:0".format(
+                                i):
+                            l_lg = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_self_attention/similar_mat/similar_func/arg/kernel:0".format(
+                                i):
+                            r_lg = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/lhs_1/kernel:0".format(i):
+                            l_fg_lhs_1 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/lhs_1/kernel:0".format(
+                                i):
+                            r_fg_lhs_1 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/rhs_1/kernel:0".format(i):
+                            l_fg_rhs_1 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/rhs_1/kernel:0".format(
+                                i):
+                            r_fg_rhs_1 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/lhs_2/kernel:0".format(i):
+                            l_fg_lhs_2 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/lhs_2/kernel:0".format(
+                                i):
+                            r_fg_lhs_2 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/rhs_2/kernel:0".format(i):
+                            l_fg_rhs_2 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/rhs_2/kernel:0".format(
+                                i):
+                            r_fg_rhs_2 = tensor
+
+                        if tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/lhs_3/kernel:0".format(
+                                i):
+                            l_fg_lhs_3 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/lhs_3/kernel:0".format(
+                                i):
+                            r_fg_lhs_3 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/premise_fuse_gate/rhs_3/kernel:0".format(
+                                i):
+                            l_fg_rhs_3 = tensor
+                        elif tensor.name == "diin/prepro/attention_encoder_{}/hypothesis_fuse_gate/rhs_3/kernel:0".format(
+                                i):
+                            r_fg_rhs_3 = tensor
+
+                    diffs += [l_lg - r_lg, l_fg_lhs_1 - r_fg_lhs_1, l_fg_rhs_1 - r_fg_rhs_1, l_fg_lhs_2 - r_fg_lhs_2,
+                              l_fg_rhs_2 - r_fg_rhs_2]
+                    diffs += [l_fg_lhs_3 - r_fg_lhs_3, l_fg_rhs_3 - r_fg_rhs_3]
+                diff_loss = tf.add_n([tf.nn.l2_loss(tensor) for tensor in diffs]) * tf.constant(
+                    self._diff_penalty_loss_ratio, dtype='float', shape=[], name='diff_penalty_loss_ratio')
+                ###############################
+                output_dict['loss'] = loss + diff_loss
                 metrics = dict()
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
 
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,

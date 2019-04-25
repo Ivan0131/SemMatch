@@ -6,19 +6,19 @@ from semmatch.data.token_indexers.token_indexer import TokenIndexer
 from semmatch.utils import register
 
 
-@register.register_subclass("token_indexer", "pos_tags")
-class PosTagIndexer(TokenIndexer):
-    def __init__(self, namespace: str = 'pos_tags', max_length: int = None, coarse_tags: bool = False) -> None:
+@register.register_subclass("token_indexer", "fields")
+class FieldIndexer(TokenIndexer):
+    def __init__(self, namespace: str = '%s_tags', max_length: int = None, field_name: str = 'exact_match') -> None:
         super().__init__(namespace, max_length)
-        self._namespace = namespace
-        self._coarse_tags = coarse_tags
+        if '%s' in namespace:
+            self._namespace = namespace % field_name
+        else:
+            self._namespace = namespace
+        self._field_name = field_name
 
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
-        if self._coarse_tags:
-            tag = token.pos_
-        else:
-            tag = token.tag_
-        if not tag:
+        tag = getattr(token, self._field_name, None)
+        if tag is None:
             tag = 'NONE'
         counter[self._namespace][tag] += 1
 
@@ -28,11 +28,8 @@ class PosTagIndexer(TokenIndexer):
         tags: List[str] = []
 
         for token in tokens:
-            if self._coarse_tags:
-                tag = token.pos_
-            else:
-                tag = token.tag_
-            if not tag:
+            tag = getattr(token, self._field_name, None)
+            if tag is None:
                 tag = 'NONE'
 
             tags.append(tag)

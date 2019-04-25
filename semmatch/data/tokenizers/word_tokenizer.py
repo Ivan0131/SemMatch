@@ -23,8 +23,9 @@ class WordTokenizer(Tokenizer):
 
 @register.register_subclass("tokenizer", "spacy_tokenizer")
 class SpacyTokenizer(Tokenizer):
-    def __init__(self, lang: str = 'en'):
+    def __init__(self, do_lower_case=True, lang: str = 'en'):
         self.nlp = spacy.load(lang, parse=False)
+        self.do_lower_case = do_lower_case
 
     def tokenize(self, text: str) -> List[Token]:
         text = convert_to_unicode(text)
@@ -32,8 +33,8 @@ class SpacyTokenizer(Tokenizer):
         lemmas = [w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in text]
         tags = [w.tag_ for w in text]
         ents = [w.ent_type_ for w in text]
-        words = [w for w in text]
-        tokens = [Token(text=w.text, lemma=lemma, tag=tag, ent_type=ent) for w, tag, ent, lemma in zip(words, tags, ents, lemmas)]
+        words = [w.text.lower() if self.do_lower_case else w.text for w in text]
+        tokens = [Token(text=w, lemma=lemma, tag=tag, ent_type=ent) for w, tag, ent, lemma in zip(words, tags, ents, lemmas)]
         return tokens
 
 

@@ -11,6 +11,7 @@ class AdamAccumulateOptimizer(Optimizer):
                  beta2: float = 0.999, epsilon: float = 1e-08, accum_iters: int = 1,
                  amsgrad: bool = False,
                  warmup_proportion: float = None,
+                 decay_steps: int = None, decay_rate: float = None, decay_type='polynomial',
                  weight_decay_rate: float = 0.0, embedding_learning_rate: float = None,
                  embedding_trainable: bool = True,
                  exclude_from_weight_decay: List[str] = None,
@@ -31,14 +32,19 @@ class AdamAccumulateOptimizer(Optimizer):
             self._embedding_learning_rate = embedding_learning_rate
         self._model_optimizer = None
         self._embedding_optimizer = None
+        self._decay_steps = decay_steps
+        self._decay_rate = decay_rate
+        self._decay_type = decay_type
 
     def get_or_create_optimizer(self, params):
         if self._optimizer:
             return self._optimizer
         else:
-            learning_rate = self.get_learning_rate(self._learning_rate, params.train_steps, self._warmup_proportion)
+            learning_rate = self.get_learning_rate(self._learning_rate, params.train_steps, self._warmup_proportion,
+                                                   self._decay_steps, self._decay_rate, self._decay_type)
             embedding_learning_rate = self.get_learning_rate(self._embedding_learning_rate, params.train_steps,
-                                                             self._warmup_proportion)
+                                                             self._warmup_proportion, self._decay_steps,
+                                                             self._decay_rate, self._decay_type)
             if self._weight_decay_rate == 0:
                 self._model_optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=self._beta1,
                                                                beta2=self._beta2, epsilon=self._epsilon,

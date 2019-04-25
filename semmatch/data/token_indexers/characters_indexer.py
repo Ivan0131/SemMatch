@@ -19,15 +19,11 @@ class CharactersIndexer(TokenIndexer):
                  max_word_length: int = 16,
                  start_tokens: List[str] = None,
                  end_tokens: List[str] = None) -> None:
-        super().__init__(namespace)
-        self._max_length = max_length
+        super().__init__(namespace, max_length)
         self._start_tokens = [Token(st) for st in (start_tokens or [])]
         self._end_tokens = [Token(et) for et in (end_tokens or [])]
         self._character_tokenizer = character_tokenizer
         self._max_word_length = max_word_length
-
-    def set_max_length(self, max_length):
-        self._max_length = max_length
 
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
         if token.text is None:

@@ -6,6 +6,8 @@ import zipfile
 import requests
 from urllib.error import HTTPError
 from urllib.request import urlretrieve
+import nltk
+
 
 def cpu_count():
   """Return the number of available cores."""
@@ -113,3 +115,22 @@ def maybe_download(filepath, url):
     logger.info("Successfully downloaded %s, %s bytes." %
                     (os.path.basename(filepath), statinfo.st_size))
     return filepath
+
+
+def get_exact_match(premise, hypothesis):
+    stemmer = nltk.stem.LancasterStemmer()
+    premise = [stemmer.stem(token.text) for token in premise]
+    hypothesis = [stemmer.stem(token.text) for token in hypothesis]
+    premise_set = set(premise)
+    hypothesis_set = set(hypothesis)
+    premise_exact_match = []
+    for i, token in enumerate(premise):
+        if token in hypothesis_set:
+            premise_exact_match.append(i)
+
+    hypothesis_exact_match = []
+    for i, token in enumerate(hypothesis):
+        if token in premise_set:
+            hypothesis_exact_match.append(i)
+
+    return premise_exact_match, hypothesis_exact_match

@@ -47,6 +47,22 @@ class QuoraDataReader(data_reader.DataReader):
         fields: Dict[str, Field] = {}
         tokenized_premise = self._tokenizer.tokenize(example['premise'])
         tokenized_hypothesis = self._tokenizer.tokenize(example['hypothesis'])
+
+        premise_exact_match, hypothesis_exact_match = \
+            data_utils.get_exact_match(tokenized_premise, tokenized_hypothesis)
+
+        for token in tokenized_premise:
+            token.exact_match = 0
+
+        for token in tokenized_hypothesis:
+            token.exact_match = 0
+
+        for ind in premise_exact_match:
+            tokenized_premise[ind].exact_match = 1
+
+        for ind in hypothesis_exact_match:
+            tokenized_hypothesis[ind].exact_match = 1
+
         fields['index'] = IndexField(example['index'])
         fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)
         fields["hypothesis"] = TextField(tokenized_hypothesis, self._token_indexers, max_length=self._max_length)
@@ -75,7 +91,7 @@ class QuoraDataReader(data_reader.DataReader):
                 continue
             # A neat data augmentation trick from Radford et al. (2018)
             # https://blog.openai.com/language-unsupervised/
-            if mode  == DataSplit.TRAIN:
+            if mode == DataSplit.TRAIN:
                 inputs = [[s1, s2], [s2, s1]]
             else:
                 inputs = [[s1, s2]]

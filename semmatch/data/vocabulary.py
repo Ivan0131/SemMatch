@@ -7,7 +7,8 @@ import collections
 import tqdm
 import simplejson as json
 import re
-DEFAULT_NON_PADDED_NAMESPACES = (".*tags", ".*labels")
+DEFAULT_NON_PADDED_NAMESPACES = (".*labels", )
+DEFAULT_NON_UNK_NAMESPACES = (".*tags", )
 DEFAULT_PADDING_TOKEN = "[PAD]"
 DEFAULT_OOV_TOKEN = "[UNK]"
 NAMESPACE_PADDING_FILE = 'non_padded_namespaces.txt'
@@ -35,39 +36,47 @@ def namespace_match(patterns, name):
 
 
 class ConditionDefaultDict(collections.defaultdict):
-    def __init__(self, conditions, default_factory_1, default_factory_2):
+    def __init__(self, conditions_1, conditions_2, default_factory_1, default_factory_2, default_factory_3):
         super().__init__()
-        self._conditions = conditions
+        self._conditions_1 = conditions_1
+        self._conditions_2 = conditions_2
         self._default_factory_1 = default_factory_1
         self._default_factory_2 = default_factory_2
+        self._default_factory_3 = default_factory_3
 
     def __missing__(self, key):
-        if namespace_match(self._conditions, key):
+        if namespace_match(self._conditions_1, key):
             value = self._default_factory_1()
-        else:
+        elif namespace_match(self._conditions_2, key):
             value = self._default_factory_2()
+        else:
+            value = self._default_factory_3()
         collections.defaultdict.__setitem__(self, key, value)
         return value
 
 
 class TokenToIndexDict(ConditionDefaultDict):
-    def __init__(self, non_padded_namespaces, padding_token,  oov_token):
-        super().__init__(non_padded_namespaces, lambda: {}, lambda: {padding_token: 0, oov_token: 1})
+    def __init__(self, non_padded_namespaces, non_unk_namespaces, padding_token,  oov_token):
+        super().__init__(non_padded_namespaces, non_unk_namespaces, lambda: {}, lambda: {padding_token: 0}, lambda: {padding_token: 0, oov_token: 1})
 
 
 class IndexToTokenDict(ConditionDefaultDict):
-    def __init__(self, non_padded_namespaces, padding_token,  oov_token):
-        super().__init__(non_padded_namespaces, lambda: {}, lambda: {0: padding_token, 1: oov_token})
+    def __init__(self, non_padded_namespaces, non_unk_namespaces, padding_token,  oov_token):
+        super().__init__(non_padded_namespaces, non_unk_namespaces, lambda: {}, lambda: {0: padding_token}, lambda: {0: padding_token, 1: oov_token})
 
 
 class Vocabulary(object):
     def __init__(self, counter=None, non_padded_namespaces=DEFAULT_NON_PADDED_NAMESPACES,
+                 non_unk_namespace=DEFAULT_NON_UNK_NAMESPACES,
                  pretrained_files=None, only_include_pretrained_words=False):
         self._padding_token = DEFAULT_PADDING_TOKEN
         self._oov_token = DEFAULT_OOV_TOKEN
         self._non_padded_namespaces = set(non_padded_namespaces)
-        self._token_to_index = TokenToIndexDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
-        self._index_to_token = IndexToTokenDict(self._non_padded_namespaces, self._padding_token, self._oov_token)
+        self._non_unk_namespace = set(non_unk_namespace)
+        self._token_to_index = TokenToIndexDict(self._non_padded_namespaces, self._non_unk_namespace,
+                                                self._padding_token, self._oov_token)
+        self._index_to_token = IndexToTokenDict(self._non_padded_namespaces, self._non_unk_namespace,
+                                                self._padding_token, self._oov_token)
         self._namespace_to_path = dict()
         self._extend(counter, pretrained_files=pretrained_files,
                      only_include_pretrained_words=only_include_pretrained_words)

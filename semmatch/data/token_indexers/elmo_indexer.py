@@ -88,11 +88,7 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
     def __init__(self,
                  max_length: int = None,
                  namespace: str = 'elmo_characters') -> None:
-        super().__init__(namespace)
-        self._max_length = max_length
-
-    def set_max_length(self, max_length):
-        self._max_length = max_length
+        super().__init__(namespace, max_length)
 
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
         pass

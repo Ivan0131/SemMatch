@@ -5,9 +5,10 @@ data:
   tmp_path: "../data/datarliving/glove_tokens"
 
 model:
-  name: 'mcan'
+  name: 'bilstm'
   num_classes: 3
   keep_prob: 1.0
+  hidden_dim: 50
   embedding_mapping:
     name: 'base'
     encoders:

@@ -1,0 +1,41 @@
+data:
+  name: "snli" # or quora_data_reader
+  data_path: '../data/snli'
+  batch_size: 30
+  tmp_path: "../data/snli/glove"
+  token_indexers:
+    tokens:
+      name: "single_id"
+
+model:
+  name: 'mlstm'
+  num_classes: 3
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "False"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/match_lstm_glove_snli/embedding"
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 3
+        namespace: 'labels'
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.001
+    decay_steps: 18338
+    decay_rate: 0.95
+    decay_type: 'exponential'
+run_config:
+  model_dir: './outputs/match_lstm_glove_snli/'
+hparams:
+  eval_steps: 333
+  early_stopping_max_steps_without_decrease: 10000000
+  early_stopping_min_steps: 1000000
+
+
+

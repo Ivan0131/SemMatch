@@ -1,14 +1,16 @@
 import os
 from typing import Dict, List
 import zipfile
+import re
 import tensorflow as tf
 from semmatch.data.data_readers import data_reader
 from semmatch.data.data_readers.data_reader import DataSplit
 from semmatch.data import data_utils
 from semmatch.data.fields import Field, TextField, LabelField, IndexField
-from semmatch.data.tokenizers import WordTokenizer, Tokenizer
+from semmatch.data.tokenizers import WordTokenizer, Tokenizer, NLTKSplitter, Token, WhiteWordSplitter, NLTKWordStemmer
 from semmatch.data import Instance
-from semmatch.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
+from semmatch.data.token_indexers import SingleIdTokenIndexer, TokenIndexer, PosTagIndexer, FieldIndexer, \
+    CharactersIndexer
 from semmatch.utils import register
 from semmatch.utils.logger import logger
 import simplejson as json
@@ -34,7 +36,7 @@ class MultinliDataReader(data_reader.DataReader):
                  #train_snli_filename="snli_1.0/snli_1.0_train.jsonl",
                  #valid_snli_filename="snli_1.0/snli_1.0_dev.jsonl",
                  #test_snli_filename='snli_1.0/snli_1.0_test.jsonl',
-                 max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
+                 max_length: int = None, tokenizer: Tokenizer = WordTokenizer(word_splitter = WhiteWordSplitter()),
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
                          emb_pretrained_files=emb_pretrained_files,
@@ -42,10 +44,20 @@ class MultinliDataReader(data_reader.DataReader):
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)
         self._tokenizer = tokenizer
-        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens')}
+        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens'),
+                                                  'chars': CharactersIndexer(namespace='chars'),
+                                                  'pos_tags': PosTagIndexer(namespace='pos_tags'),
+                                                  'exact_match_labels': FieldIndexer(namespace='exact_match_labels',
+                                                                                     field_name='exact_match')}
+
+    def _parsing_parse(self, parse):
+        base_parse = [s.rstrip(" ").rstrip(")") for s in parse.split("(") if ")" in s]
+        pos = [pair.split(" ")[0] for pair in base_parse]
+        return pos
 
     def _read(self, mode: str):
         self._maybe_download_corpora(self._data_path)
+
         filename = self.get_filename_by_mode(mode)
         if filename:
             file_path = os.path.join(self._data_path, filename)
@@ -57,6 +69,15 @@ class MultinliDataReader(data_reader.DataReader):
 
                     id = fields['pairID']
                     label = fields["gold_label"]
+                    sent1 = fields["sentence1_binary_parse"]
+                    sent2 = fields["sentence2_binary_parse"]
+                    sent1 = re.sub(r'\(|\)', '', sent1)
+                    sent2 = re.sub(r'\(|\)', '', sent2)
+                    sent1 = sent1.replace(' ', '')
+                    sent2 = sent2.replace(' ', '')
+                    sent1_pos = fields['sentence1_parse']
+                    sent2_pos = fields['sentence2_parse']
+
                     if label == '-':
                         # These were cases where the annotators disagreed; we'll just skip them.  It's
                         # like 800 out of 500k examples in the training data.
@@ -65,15 +86,19 @@ class MultinliDataReader(data_reader.DataReader):
                     if mode in [DataSplit.TRAIN, DataSplit.EVAL]:
                         example = {
                             "id": id,
-                            "premise": fields["sentence1"],
-                            "hypothesis": fields["sentence2"],
+                            "premise": sent1,
+                            "hypothesis": sent2,
+                            "premise_pos": sent1_pos,
+                            "hypothesis_pos": sent2_pos,
                             "label": label
                         }
                     else:
                         example = {
                             "id": id,
-                            "premise": fields["sentence1"],
-                            "hypothesis": fields["sentence2"]
+                            "premise": sent1,
+                            "hypothesis": sent2,
+                            "premise_pos": sent1_pos,
+                            "hypothesis_pos": sent2_pos,
                         }
 
                     yield self._process(example)
@@ -84,6 +109,41 @@ class MultinliDataReader(data_reader.DataReader):
         fields: Dict[str, Field] = {}
         tokenized_premise = self._tokenizer.tokenize(example['premise'])
         tokenized_hypothesis = self._tokenizer.tokenize(example['hypothesis'])
+        premise_pos = self._parsing_parse(example['premise_pos'])
+        hypothesis_pos = self._parsing_parse(example['hypothesis_pos'])
+
+        premise_exact_match, hypothesis_exact_match = \
+            data_utils.get_exact_match(tokenized_premise, tokenized_hypothesis)
+
+        if len(tokenized_premise) != len(premise_pos):
+            print(tokenized_premise)
+            print(premise_pos)
+            print(example['premise'])
+            print(example['premise_pos'])
+
+        assert len(tokenized_premise) == len(premise_pos)
+
+        if len(tokenized_hypothesis) != len(hypothesis_pos):
+            print(tokenized_hypothesis)
+            print(hypothesis_pos)
+            print(example['hypothesis'])
+            print(example['hypothesis_pos'])
+        assert len(tokenized_hypothesis) == len(hypothesis_pos)
+
+        for token, token_pos in zip(tokenized_premise, premise_pos):
+            token.tag_ = token_pos
+            token.exact_match = 0
+
+        for token, token_pos in zip(tokenized_hypothesis, hypothesis_pos):
+            token.tag_ = token_pos
+            token.exact_match = 0
+
+        for ind in premise_exact_match:
+            tokenized_premise[ind].exact_match = 1
+
+        for ind in hypothesis_exact_match:
+            tokenized_hypothesis[ind].exact_match = 1
+
         fields['index'] = IndexField(example['id'])
         fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)
         fields["hypothesis"] = TextField(tokenized_hypothesis, self._token_indexers, max_length=self._max_length)

@@ -9,5 +9,5 @@ data:
       name: "single_id"
 
 num_classes: 3
-export_dir: './outputs/decomp_attn_glove_snli/export/best_exporter/1555736647'
+export_dir: '../match_lstm/outputs/match_lstm_glove_snli/export/best_exporter/1556100603'
 output_file: "eval_report.xlsx"

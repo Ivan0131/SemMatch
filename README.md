@@ -3,22 +3,23 @@
 
 | Model | Dataset | Original Paper | Our Implement|
 | :------: | :------: | :------: | :------: |
-| esim | Multinli Test Match | 72.3% (Accuracy) | 72.6%|
-| bimpm (not using the same version of quora) | Quora Dev| 88.69% (Accuracy)| 86.3% |
-| decomposable attention |SNLI Test| 86.3% (Accuracy)| 84.0%|
+| ESIM | Multinli Test Match | 72.3% (Accuracy) | 72.6%|
+| BiMPM (not using the same version of quora) | Quora Dev| 88.69% (Accuracy)| 86.3% |
+| Decomposable-Attention |SNLI Test| 86.3% (Accuracy)| 84.0%|
+| match-LSTM| SNLI Test | 86.1% (Accuracy) | 84.1%|
 
 Multinli数据集 Accuracy
 
 | Model | Dev Match | Dev Mismatch | Test Match | Test Mismatch| 
 | :------: | :------: | :------: | :------: | :------: | 
-| esim | 72.6 | 73.3 | 73.1 | 72.6 |
+| ESIM | 72.6 | 73.3 | 73.1 | 72.6 |
 
 Quora数据集 F1-Score/Accuracy
 
 | Model | Dev | Test |
 | :------: | :------: | :------: |
-|esim | 80.5/84.3  | 60.5/81.5 |
-|bimpm | 82.3/86.3 | 62.8/84.0 | 
+|ESIM | 80.5/84.3  | 60.5/81.5 |
+|BiMPM | 82.3/86.3 | 62.8/84.0 | 
 
 ## INSTALL
 ```

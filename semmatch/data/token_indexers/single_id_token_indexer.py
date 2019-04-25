@@ -31,14 +31,11 @@ class SingleIdTokenIndexer(TokenIndexer):
                  max_length: int = None,
                  start_tokens: List[str] = None,
                  end_tokens: List[str] = None) -> None:
-        super().__init__(namespace)
+        super().__init__(namespace, max_length)
         self.lowercase_tokens = lowercase_tokens
         self._max_length = max_length
         self._start_tokens = [Token(st) for st in (start_tokens or [])]
         self._end_tokens = [Token(et) for et in (end_tokens or [])]
-
-    def set_max_length(self, max_length):
-        self._max_length = max_length
 
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
         # If `text_id` is set on the token (e.g., if we're using some kind of hash-based word

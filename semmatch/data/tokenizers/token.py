@@ -27,6 +27,8 @@ class Token:
         set.  You can `also` set ``text`` with the original text, if you want, so that you can
         still use a character-level representation in addition to a hash-based word embedding.
 
+    exact_match : the token in this sentence whether has a match token in another sentence.
+
         The other fields on ``Token`` follow the fields on spacy's ``Token`` object; this is one we
         added, similar to spacy's ``lex_id``.
     """
@@ -34,11 +36,13 @@ class Token:
                  text: str = None,
                  idx: int = None,
                  lemma: str = None,
+                 stem: str = None,
                  pos: str = None,
                  tag: str = None,
                  dep: str = None,
                  ent_type: str = None,
-                 text_id: int = None) -> None:
+                 text_id: int = None,
+                 exact_match: int = None) -> None:
         self.text = text
         self.idx = idx
         self.lemma_ = lemma
@@ -47,6 +51,8 @@ class Token:
         self.dep_ = dep
         self.ent_type_ = ent_type
         self.text_id = text_id
+        self.stem_ = stem
+        self.exact_match = exact_match
 
     def __str__(self):
         return self.text
