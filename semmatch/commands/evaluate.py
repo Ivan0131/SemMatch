@@ -84,7 +84,7 @@ class Evaluate(Command):
                     print("processing %s/%s"%(num_batch, total_num))
                     #######################
                     #print(probs)
-                    predictions = np.argmax(probs, axis=1)
+                    predictions = probs #np.argmax(probs, axis=1)
                     #predictions = (probs > 0.5).astype(np.int32)
                     #print(predictions)
                     y_true.append(true_label_val)

@@ -7,6 +7,7 @@
 | BiMPM (not using the same version of quora) | Quora Dev| 88.69% (Accuracy)| 86.3% |
 | Decomposable-Attention |SNLI Test| 86.3% (Accuracy)| 84.0%|
 | match-LSTM| SNLI Test | 86.1% (Accuracy) | 84.1%|
+| DIIN| Multinli Test Match | 78.8% (Accuracy) | 75.4%|
 
 Multinli数据集 Accuracy
 

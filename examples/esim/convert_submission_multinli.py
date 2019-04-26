@@ -1,13 +1,12 @@
 from openpyxl import load_workbook
 
 
-label_vocab = ['neutral', 'entailment', 'contradiction']
-wb = load_workbook("pred_report.xlsx")
-ws = wb['examples']
+label_vocab = ['contradiction', 'entailment', 'neutral']
+tsv_file = open("../diin/eval_report.tsv", 'r')
 with open("submission.csv", 'w', encoding='utf-8') as csv_file:
     csv_file.write("pairID,gold_label\n")
-    for row in ws.iter_rows():
-        if row[0].value == "index":
-            continue
-        csv_file.write("%s,%s\n"%(row[0].value, label_vocab[int(row[3].value)]))
+    rows = tsv_file.readlines()
+    for row in rows[1:]:
+        field = row.strip().split("\t")
+        csv_file.write("%s,%s\n"%(field[0], label_vocab[int(field[1])]))
 

@@ -71,7 +71,7 @@ class Predict(Command):
                     output_vals = sess.run(outputs)
 
                     data_batch = output_vals['inputs']
-                    if "index/inde" in data_batch:
+                    if "index/index" in data_batch:
                         index_val, premise_tokens_val, hypothesis_tokens_val = \
                             data_batch['index/index'], data_batch['premise/tokens'], data_batch['hypothesis/tokens']
                         indexs = [str(index, 'utf-8') for index in index_val]

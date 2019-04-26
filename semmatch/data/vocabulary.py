@@ -24,7 +24,7 @@ def save_to_txt(items, filename):
 def load_from_txt(filename):
     with open(filename, 'r', encoding='utf-8') as txt_file:
         lines = txt_file.readlines()
-        items = [line.strip() for line in lines]
+        items = [line.strip('\n') for line in lines]
         return items
 
 
@@ -126,7 +126,8 @@ class Vocabulary(object):
         for namespace, mapping in self._index_to_token.items():
             for (index, token) in mapping.items():
                 if self._token_to_index[namespace][token] != int(index):
-                    logger.error("index/token in index_to_token : %s/%s not in token_to_index"%(index, token))
+                    logger.error("index/token in index_to_token with namespace %s: %s/%s not in token_to_index" %
+                                 (namespace, index, token))
                     return False
         return True
 

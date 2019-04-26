@@ -1,0 +1,22 @@
+data:
+  name: "mnli"
+  data_path: '../data/mnli'
+  batch_size: 70
+  tmp_path: "../data/mnli/glove_diin"
+  max_length: 48
+  token_indexers:
+    tokens:
+      name: "single_id"
+    chars:
+      name: "chars"
+      max_word_length: 16
+    pos_tags:
+      name: "pos_tags"
+    exact_match_labels:
+      name: "fields"
+      field_name: 'exact_match'
+      namespace: 'exact_match_labels'
+
+#num_classes: 3
+export_dir: './outputs/esim_diin_glove_mnli/export/best_exporter/1556170309'
+output_file: "eval_report.tsv"

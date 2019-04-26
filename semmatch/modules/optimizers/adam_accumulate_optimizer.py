@@ -16,7 +16,9 @@ class AdamAccumulateOptimizer(Optimizer):
                  embedding_trainable: bool = True,
                  exclude_from_weight_decay: List[str] = None,
                  optimizer_name: str = 'adam_optimizer'):
-        super().__init__(optimizer_name=optimizer_name, embedding_trainable=embedding_trainable)
+        super().__init__(learning_rate=learning_rate, embedding_learning_rate=embedding_learning_rate,
+                         optimizer_name=optimizer_name, embedding_trainable=embedding_trainable,
+                         weight_decay_rate=weight_decay_rate, exclude_from_weight_decay=exclude_from_weight_decay)
         self._learning_rate = learning_rate
         self._beta1 = beta1
         self._beta2 = beta2
@@ -24,12 +26,6 @@ class AdamAccumulateOptimizer(Optimizer):
         self._accum_iters = accum_iters
         self._amsgrad = amsgrad
         self._warmup_proportion = warmup_proportion
-        self._weight_decay_rate = weight_decay_rate
-        self._exclude_from_weight_decay = exclude_from_weight_decay
-        if embedding_learning_rate is None:
-            self._embedding_learning_rate = learning_rate
-        else:
-            self._embedding_learning_rate = embedding_learning_rate
         self._model_optimizer = None
         self._embedding_optimizer = None
         self._decay_steps = decay_steps
@@ -40,11 +36,12 @@ class AdamAccumulateOptimizer(Optimizer):
         if self._optimizer:
             return self._optimizer
         else:
-            learning_rate = self.get_learning_rate(self._learning_rate, params.train_steps, self._warmup_proportion,
-                                                   self._decay_steps, self._decay_rate, self._decay_type)
-            embedding_learning_rate = self.get_learning_rate(self._embedding_learning_rate, params.train_steps,
-                                                             self._warmup_proportion, self._decay_steps,
-                                                             self._decay_rate, self._decay_type)
+            schedule = self.get_schedule(params.train_steps, self._warmup_proportion,
+                                         self._decay_steps, self._decay_rate, self._decay_type)
+            learning_rate = self._learning_rate * schedule
+
+            embedding_learning_rate = self._embedding_learning_rate * schedule
+
             if self._weight_decay_rate == 0:
                 self._model_optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=self._beta1,
                                                                beta2=self._beta2, epsilon=self._epsilon,
@@ -63,7 +60,7 @@ class AdamAccumulateOptimizer(Optimizer):
                     epsilon=self._beta_3,
                     amsgrad=self._amsgrad,
                     accum_iters=self._accum_iters,
-                    exclude_from_weight_decay=self._exclude_from_weight_decay, name="adamw_model_optimizer")
+                    name="adamw_model_optimizer")
 
                 self._embedding_optimizer = AdamAccumulateWeightDecayOptimizer(
                     learning_rate=embedding_learning_rate,
@@ -73,7 +70,7 @@ class AdamAccumulateOptimizer(Optimizer):
                     epsilon=self._beta_3,
                     amsgrad=self._amsgrad,
                     accum_iters=self._accum_iters,
-                    exclude_from_weight_decay=self._exclude_from_weight_decay, name="adamw_embedding_optimizer")
+                    name="adamw_embedding_optimizer")
             return self._optimizer, self._embedding_optimizer
 
 
@@ -88,22 +85,23 @@ class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
                  epsilon=1e-6,
                  accum_iters=1,
                  amsgrad=False,
-                 exclude_from_weight_decay=None,
                  name="AdamWeightDecayOptimizer"):
         """Constructs a AdamWeightDecayOptimizer."""
         super(AdamAccumulateWeightDecayOptimizer, self).__init__(False, name)
 
         self.learning_rate = learning_rate
-        self.weight_decay_rate = weight_decay_rate
         self.beta_1 = beta_1
         self.beta_2 = beta_2
         self.epsilon = epsilon
-        self.exclude_from_weight_decay = exclude_from_weight_decay
         self.accum_iters = accum_iters
         self.amsgrad = amsgrad
+        self.weight_decay_rate = weight_decay_rate
+        self._decay_var_list = None
 
-    def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+    def apply_gradients(self, grads_and_vars, global_step=None, decay_var_list=None, name=None):
         """See base class."""
+        self._decay_var_list = set(decay_var_list) if decay_var_list else None
+
         assignments = []
         if global_step is None:
             global_step = tf.train.get_or_create_global_step()
@@ -142,7 +140,7 @@ class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
                 trainable=False,
                 initializer=tf.zeros_initializer()) for (grad, param) in grads_and_vars]
 
-        flag = tf.equal(self.iterations % self.accum_iters, 0)
+        flag = tf.equal(global_step % self.accum_iters, 0)
         flag = tf.cast(flag, dtype='float32')
 
         for (grad, param), m, v, vhat, gg in zip(grads_and_vars, ms, vs, vhats, gs):
@@ -171,7 +169,8 @@ class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
             # Instead we want ot decay the weights in a manner that doesn't interact
             # with the m/v parameters. This is equivalent to adding the square
             # of the weights to the loss with plain (non-momentum) SGD.
-            if self._do_use_weight_decay(param_name):
+            #if self._do_use_weight_decay(param_name):
+            if not self._decay_var_list or param in self._decay_var_list:
                 update += self.weight_decay_rate * param
 
             update_with_lr = self.learning_rate * update
@@ -184,20 +183,3 @@ class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
                  v.assign(flag * v_t + (1 - flag) * v),
                  gg.assign((1-flag) * sum_grad)])
         return tf.group(*assignments, name=name)
-
-    def _do_use_weight_decay(self, param_name):
-        """Whether to use L2 weight decay for `param_name`."""
-        if not self.weight_decay_rate:
-            return False
-        if self.exclude_from_weight_decay:
-            for r in self.exclude_from_weight_decay:
-                if re.search(r, param_name) is not None:
-                    return False
-        return True
-
-    def _get_variable_name(self, param_name):
-        """Get the variable name from the tensor name."""
-        m = re.match("^(.*):\\d+$", param_name)
-        if m is not None:
-            param_name = m.group(1)
-        return param_name
