@@ -4,6 +4,7 @@ from semmatch.utils import register
 from semmatch.utils.exception import ConfigureError
 from semmatch.modules.embeddings import EmbeddingMapping
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
+from semmatch.modules.embeddings.encoders import Bert
 from semmatch import nn
 
 
@@ -12,7 +13,9 @@ from semmatch import nn
 @register.register_subclass('model', 'diin')
 class DIIN(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 300, keep_prob: float = 1.0, dropout_decay_step: int = 10000,
+                 hidden_dim: int = 300, dropout_rate: float = 0.0, dropout_decay_step: int = 10000,
+                 l2_loss: bool = True, sigmoid_growing_l2loss: bool = True, l2_regularization_ratio: float = 9e-5,
+                 weight_l2loss_step_full_reg: int = 100000,
                  char_filter_sizes: str = "5", char_filter_channel_dims: str = "100",
                  dropout_decay_rate: float = 0.977, highway_num_layers: int = 2, num_self_att_enc_layers: int = 1,
                  first_scale_down_layer_relu: bool = False, dense_net_first_scale_down_ratio: float = 0.3,
@@ -23,7 +26,7 @@ class DIIN(Model):
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._keep_prob = keep_prob
+        self._keep_prob = 1. - dropout_rate
         self._initializer_range = 0.02
         self._dropout_decay_step = dropout_decay_step
         self._dropout_decay_rate = dropout_decay_rate
@@ -39,8 +42,19 @@ class DIIN(Model):
         self._char_filter_size = list(map(int, char_filter_sizes.split(',')))
         self._char_filter_channel_dims = list(map(int, char_filter_channel_dims.split(',')))
         self._diff_penalty_loss_ratio = diff_penalty_loss_ratio
+        self._l2_loss = l2_loss
+        self._sigmoid_growing_l2loss = sigmoid_growing_l2loss
+        self._l2_regularization_ratio = l2_regularization_ratio
+        self._weight_l2loss_step_full_reg = weight_l2loss_step_full_reg
 
     def forward(self, features, labels, mode, params):
+        global_step = tf.train.get_or_create_global_step()
+        dropout_keep_rate = tf.train.exponential_decay(self._keep_prob, global_step,
+                                                       self._dropout_decay_step, self._dropout_decay_rate,
+                                                       staircase=False, name='dropout_keep_rate')
+        tf.summary.scalar('dropout_keep_rate', dropout_keep_rate)
+
+        params.add_hparam('dropout_rate', 1 - dropout_keep_rate)
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
         with tf.variable_scope(self._model_name):
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
@@ -63,7 +77,15 @@ class DIIN(Model):
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
             if features.get('premise/elmo_characters', None) is not None:
                 prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+            if features.get('hypothesis/elmo_characters', None) is not None:
                 hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
+            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+                hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
 
@@ -83,37 +105,33 @@ class DIIN(Model):
             premise_chars = features_embedding.get('premise/chars', None)
             hypothesis_chars = features_embedding.get('hypothesis/chars', None)
 
-            with tf.variable_scope("conv") as scope:
-                conv_pre = nn.multi_conv1d_max(premise_chars, self._char_filter_size, self._char_filter_channel_dims,
-                                               "VALID", is_training, self._keep_prob, scope='conv')
-                scope.reuse_variables()
-                conv_hyp = nn.multi_conv1d_max(hypothesis_chars, self._char_filter_size, self._char_filter_channel_dims,
-                                               "VALID", is_training, self._keep_prob, scope='conv')
-                #conv_pre = tf.reshape(conv_pre, [-1, self.sequence_length, config.char_out_size])
-                #conv_hyp = tf.reshape(conv_hyp, [-1, self.sequence_length, config.char_out_size])
+            if premise_chars is not None and hypothesis_chars is not None:
 
-            premise_ins.append(conv_pre)
-            hypothesis_ins.append(conv_hyp)
+                with tf.variable_scope("conv") as scope:
+                    conv_pre = nn.multi_conv1d_max(premise_chars, self._char_filter_size, self._char_filter_channel_dims,
+                                                   "VALID", is_training, dropout_keep_rate, scope='conv')
+                    scope.reuse_variables()
+                    conv_hyp = nn.multi_conv1d_max(hypothesis_chars, self._char_filter_size, self._char_filter_channel_dims,
+                                                   "VALID", is_training, dropout_keep_rate, scope='conv')
+                    #conv_pre = tf.reshape(conv_pre, [-1, self.sequence_length, config.char_out_size])
+                    #conv_hyp = tf.reshape(conv_hyp, [-1, self.sequence_length, config.char_out_size])
+
+                    premise_ins.append(conv_pre)
+                    hypothesis_ins.append(conv_hyp)
 
             premise_pos = features_embedding.get('premise/pos_tags', None)
             hypothesis_pos = features_embedding.get('hypothesis/pos_tags', None)
 
-            premise_ins.append(premise_pos)
-            hypothesis_ins.append(hypothesis_pos)
+            if premise_pos is not None and hypothesis_pos is not None:
+                premise_ins.append(premise_pos)
+                hypothesis_ins.append(hypothesis_pos)
 
-            premise_exact_match = tf.cast(features.get('premise/exact_match_labels', None), tf.float32)
-            hypothesis_exact_match = tf.cast(features.get('hypothesis/exact_match_labels', None), tf.float32)
+            premise_exact_match = features.get('premise/exact_match_labels', None)
+            hypothesis_exact_match = features.get('hypothesis/exact_match_labels', None)
 
-            premise_ins.append(tf.expand_dims(premise_exact_match, -1))
-            hypothesis_ins.append(tf.expand_dims(hypothesis_exact_match, -1))
-
-            global_step = tf.train.get_or_create_global_step()
-            dropout_keep_rate = tf.train.exponential_decay(self._keep_prob, global_step,
-                                                           self._dropout_decay_step, self._dropout_decay_rate,
-                                                           staircase=False, name='dropout_keep_rate')
-            dropout_dropout_rate = 1 - dropout_keep_rate
-
-            tf.summary.scalar('dropout_keep_rate', dropout_keep_rate)
+            if premise_exact_match is not None and hypothesis_exact_match is not None:
+                premise_ins.append(tf.expand_dims(tf.cast(premise_exact_match, tf.float32), -1))
+                hypothesis_ins.append(tf.expand_dims(tf.cast(hypothesis_exact_match, tf.float32), -1))
 
             premise_in = tf.concat(premise_ins, axis=2)
             hypothesis_in = tf.concat(hypothesis_ins, axis=2)
@@ -154,7 +172,7 @@ class DIIN(Model):
                     # mask = tf.expand_dims(tf.sequence_mask(query_len, tf.shape(query)[1], dtype=tf.float32),
                     #                       axis=2) * \
                     #        tf.expand_dims(tf.sequence_mask(key_len, tf.shape(key)[1], dtype=tf.float32), axis=1)
-                    bi_att_mx = tf.layers.dropout(bi_att_mx, dropout_dropout_rate, training=is_training)
+                    bi_att_mx = tf.layers.dropout(bi_att_mx, 1-dropout_keep_rate, training=is_training)
 
                 with tf.variable_scope("dense_net"):
                     dim = bi_att_mx.get_shape().as_list()[-1]
@@ -190,6 +208,11 @@ class DIIN(Model):
             predictions = tf.argmax(logits, -1)
             output_dict = {'logits': logits, 'predictions': predictions}
 
+            probs = tf.nn.softmax(logits, -1)
+            output_score = tf.estimator.export.PredictOutput(probs)
+            export_outputs = {"output_score": output_score}
+            output_dict['export_outputs'] = export_outputs
+
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
                     raise ConfigureError("The input features should contain label with vocabulary namespace "
@@ -198,7 +221,31 @@ class DIIN(Model):
                 labels = features['label/labels']
 
                 loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+                #######l2 loss#################
+                if self._l2_loss:
+                    if self._sigmoid_growing_l2loss:
+                        weights_added = tf.add_n([tf.nn.l2_loss(tensor) for tensor in tf.trainable_variables() if
+                                                  tensor.name.endswith("weights:0") or tensor.name.endswith('kernel:0') or tensor.name.endswith('filter:0')])
+                        full_l2_step = tf.constant(self._weight_l2loss_step_full_reg, dtype=tf.int32, shape=[],
+                                                   name='full_l2reg_step')
+                        full_l2_ratio = tf.constant(self._l2_regularization_ratio, dtype=tf.float32, shape=[],
+                                                    name='l2_regularization_ratio')
+                        gs_flt = tf.cast(global_step, tf.float32)
+                        half_l2_step_flt = tf.cast(full_l2_step / 2, tf.float32)
 
+                        # (self.global_step - full_l2_step / 2)
+                        # tf.cast((self.global_step - full_l2_step / 2) * 8, tf.float32) / tf.cast(full_l2_step / 2 ,tf.float32)
+                        # l2loss_ratio = tf.sigmoid( tf.cast((self.global_step - full_l2_step / 2) * 8, tf.float32) / tf.cast(full_l2_step / 2 ,tf.float32)) * full_l2_ratio
+                        l2loss_ratio = tf.sigmoid(((gs_flt - half_l2_step_flt) * 8) / half_l2_step_flt) * full_l2_ratio
+                        tf.summary.scalar('l2loss_ratio', l2loss_ratio)
+                        l2loss = weights_added * l2loss_ratio
+                    else:
+                        l2loss = tf.add_n([tf.nn.l2_loss(tensor) for tensor in tf.trainable_variables() if
+                                           tensor.name.endswith("weights:0") or tensor.name.endswith(
+                                               'kernel:0')]) * tf.constant(self._l2_regularization_ratio,
+                                                                           dtype='float', shape=[],
+                                                                           name='l2_regularization_ratio')
+                    tf.summary.scalar('l2loss', l2loss)
                 ######diff loss###############################
                 diffs = []
                 for i in range(self._num_self_att_enc_layers):
@@ -249,8 +296,9 @@ class DIIN(Model):
                     diffs += [l_fg_lhs_3 - r_fg_lhs_3, l_fg_rhs_3 - r_fg_rhs_3]
                 diff_loss = tf.add_n([tf.nn.l2_loss(tensor) for tensor in diffs]) * tf.constant(
                     self._diff_penalty_loss_ratio, dtype='float', shape=[], name='diff_penalty_loss_ratio')
+                tf.summary.scalar('diff_loss', diff_loss)
                 ###############################
-                output_dict['loss'] = loss + diff_loss
+                output_dict['loss'] = loss + l2loss + diff_loss
                 metrics = dict()
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)

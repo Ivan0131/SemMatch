@@ -7,3 +7,6 @@ from semmatch.models.abcnn import ABCNN
 from semmatch.models.decomp_attn import DecomposableAttention
 from semmatch.models.mcan import MCAN
 from semmatch.models.match_lstm import MatchLSTM
+from semmatch.models.drr_net import DRr_Net
+from semmatch.models.bert_classifier import BertClassifier
+from semmatch.models.mvlstm import MVLSTM

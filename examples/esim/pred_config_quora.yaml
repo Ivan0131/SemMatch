@@ -1,9 +1,8 @@
 data:
   name: "quora" # or quora_data_reader
   data_path: '../data/quora'
-  test_filename: "test.tsv"
-  batch_size: 32
-  tmp_path: "../data/quora/glove_new_eval"
+  batch_size: 256
+  tmp_path: "../data/quora/glove_tokens"
 
-export_dir: './outputs/esim_glove_quora/export/best_exporter/1555319297'
+export_dir: '../mcan/outputs/mcan_glove_quora/export/best_exporter/1557912245'
 output_file: "pred_report.csv"

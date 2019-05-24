@@ -1,0 +1,24 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  tmp_path: '../data/quora/bert/'
+  batch_size: 128
+  vocab_init_files:
+    tokens: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+  emb_pretrained_files:
+    tokens: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+  only_include_pretrained_words: 'True'
+  concat_sequence: 'True'
+  token_indexers:
+    tokens:
+      name: "single_id"
+      start_tokens: ['[CLS]']
+      end_tokens: ['[SEP]']
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+
+export_dir: 'outputs/bert_quora/export/best_exporter/1558640289'
+output_file: "pred_report.csv"

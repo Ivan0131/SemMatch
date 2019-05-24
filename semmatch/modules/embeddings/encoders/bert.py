@@ -18,14 +18,17 @@ import tensorflow as tf
 
 @register.register_subclass("encoder", 'bert')
 class Bert(Encoder):
-    def __init__(self, config_file: str, new_vocab_file: str, new_vocab_size: int,
-                 num_oov_buckets: int, vocab_namespace: str, mask_namespace:str = None,
-                 old_vocab_file: str = None, old_vocab_size: int = -1, keep_prob: float = 1.0,
-                 projection_dim: int = None,
+    def __init__(self, config_file: str, new_vocab_file: str, vocab_namespace: str,
+                 new_vocab_size: int = None, num_oov_buckets: int = 0, mask_namespace:str = None,
+                 old_vocab_file: str = None, old_vocab_size: int = -1, dropout_rate: float = 0.0,
+                 projection_dim: int = None, remove_bos_eos: bool = True,
                  ckpt_to_initialize_from: str = None,
                  use_one_hot_embeddings: bool = False, encoder_name="bert"):
-        super().__init__(encoder_name=encoder_name)
+        super().__init__(encoder_name=encoder_name, vocab_namespace=vocab_namespace)
         self._new_vocab_file = new_vocab_file
+        if new_vocab_size is None:
+            with open(new_vocab_file, 'r') as txt_file:
+                new_vocab_size = len(txt_file.readlines())
         self._new_vocab_size = new_vocab_size
         self._num_oov_buckets = num_oov_buckets
         self._old_vocab_file = old_vocab_file
@@ -35,8 +38,9 @@ class Bert(Encoder):
         self._use_one_hot_embeddings = use_one_hot_embeddings
         self._vocab_namespace = vocab_namespace
         self._mask_namespace = mask_namespace
-        self._dropout_prob = 1 - keep_prob
+        self._dropout_rate = dropout_rate
         self._projection_dim = projection_dim
+        self._remove_bos_eos = remove_bos_eos
 
     def forward(self, features, labels, mode, params):
         outputs = dict()
@@ -58,7 +62,9 @@ class Bert(Encoder):
                             logger.warning("The mask namespace %s with field name %s is not in features (%s)"
                                            % (self._mask_namespace, field_name, mask_feature_key))
                     if input_mask is None:
-                        _, input_mask = nn.length(input_ids)
+                        input_length, input_mask = nn.length(input_ids)
+                    else:
+                        input_length, _ = nn.length(input_ids)
                     model = BertModel(
                         config=self._bert_config,
                         is_training=is_training,
@@ -66,8 +72,15 @@ class Bert(Encoder):
                         input_mask=input_mask,
                         use_one_hot_embeddings=self._use_one_hot_embeddings)
 
-                    embedding_output = model.get_embedding_output() #model.get_sequence_output()
-                    emb_drop = tf.layers.dropout(embedding_output, self._dropout_prob, training=is_training)
+                    embedding_output = model.get_sequence_output()
+
+                    if self._remove_bos_eos:
+                        embedding_output = self.remove_bos_eos(embedding_output, input_length)
+
+                    dropout_rate = params.get('dropout_rate')
+                    if dropout_rate is None:
+                        dropout_rate = self._dropout_rate
+                    emb_drop = tf.layers.dropout(embedding_output, dropout_rate, training=is_training)
                     if self._projection_dim:
                         emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False,
                                                    kernel_initializer=initializers.xavier_initializer())
@@ -104,13 +117,30 @@ class Bert(Encoder):
                 var_name_to_prev_var_name=embedding_vars_mapping)
         return ws
 
+    def remove_bos_eos(self, layer, sequence_lengths):
+        layer_wo_bos_eos = layer[:, 1:, :]
+        layer_wo_bos_eos = tf.reverse_sequence(
+            layer_wo_bos_eos,
+            sequence_lengths - 1,
+            seq_axis=1,
+            batch_axis=0,
+        )
+        layer_wo_bos_eos = layer_wo_bos_eos[:, 1:, :]
+        layer_wo_bos_eos = tf.reverse_sequence(
+            layer_wo_bos_eos,
+            sequence_lengths - 2,
+            seq_axis=1,
+            batch_axis=0,
+        )
+        return layer_wo_bos_eos
+
     @classmethod
     def init_from_params(cls, params, vocab):
         config_file = params.pop('config_file', None)
         if config_file is None:
             raise ConfigureError("Please provide bert config file for bert embedding.")
-        new_vocab_file = params.pop('vocab_file', None)
-        if new_vocab_file is None:
+        old_vocab_file = params.pop('vocab_file', None)
+        if old_vocab_file is None:
             logger.warning("The vocab file is not provided. We consider the embedding vocab is the same as the data "
                            "vocab acquiescently.")
         ckpt_to_initialize_from = params.pop('ckpt_to_initialize_from', None)
@@ -121,19 +151,18 @@ class Bert(Encoder):
         encoder_name = params.pop("encoder_name", "bert")
         vocab_namespace = params.pop("namespace", 'tokens')
         mask_namespace = params.pop("mask_namespace", None)
-        old_vocab_file = vocab.get_vocab_path(vocab_namespace)
-        old_vocab_size = vocab.get_vocab_size(vocab_namespace)
-        with open(new_vocab_file, 'r') as txt_file:
-            new_vocab_size = len(txt_file.readlines())
+        new_vocab_file = vocab.get_vocab_path(vocab_namespace)
+        new_vocab_size = vocab.get_vocab_size(vocab_namespace)
         projection_dim = params.pop_int("projection_dim", None)
-        keep_prob = params.pop_float("keep_prob", 1.0)
-
+        dropout_rate = params.pop_float("dropout_rate", 0.0)
+        remove_bos_eos = params.pop_bool("remove_bos_eos", True)
         params.assert_empty(cls.__name__)
 
         return cls(config_file=config_file, ckpt_to_initialize_from=ckpt_to_initialize_from,
                    new_vocab_file=new_vocab_file, new_vocab_size=new_vocab_size, num_oov_buckets= num_oov_buckets,
-                   old_vocab_file=old_vocab_file, old_vocab_size=old_vocab_size, vocab_namespace=vocab_namespace,
-                   mask_namespace=mask_namespace, projection_dim=projection_dim, keep_prob=keep_prob,
+                   old_vocab_file=old_vocab_file, vocab_namespace=vocab_namespace,
+                   remove_bos_eos = remove_bos_eos,
+                   mask_namespace=mask_namespace, projection_dim=projection_dim, dropout_rate=dropout_rate,
                    use_one_hot_embeddings=use_one_hot_embeddings, encoder_name=encoder_name)
 
 

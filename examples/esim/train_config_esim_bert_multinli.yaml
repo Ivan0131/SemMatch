@@ -3,6 +3,11 @@ data:
   data_path: '../data/mnli'
   batch_size: 64
   tmp_path: "../data/mnli/bert"
+  token_indexers:
+    tokens:
+      name: "single_id"
+      start_tokens: ['[CLS]']
+      end_tokens: ['[SEP]']
   tokenizer:
     name: "word_tokenizer"
     word_splitter:
@@ -13,7 +18,7 @@ model:
   name: 'esim'
   num_classes: 3
   hidden_dim: 300
-  keep_prob: 0.5
+  dropout_rate: 0.5
   embedding_mapping:
     name: 'base'
     encoders:
@@ -23,7 +28,7 @@ model:
         vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
         ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
         namespace: 'tokens'
-        keep_prob: 0.5
+        dropout_rate: 0.5
       labels:
         name: 'one_hot'
         n_values: 3

@@ -20,12 +20,14 @@ class QuoraDataReader(data_reader.DataReader):
                 "4d89-81d1-de4191d02cb5")
 
     def __init__(self, data_name: str = "quora", data_path: str = None, batch_size: int = 32, tmp_path: str = None,
+                 vocab_init_files: Dict[str, str] = None,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
-                 train_filename="train.tsv",
-                 valid_filename="dev.tsv", test_filename=None, max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
+                 concat_sequence: bool = False, train_filename: str = "train.tsv",
+                 valid_filename: str = "dev.tsv", test_filename: str = "test.tsv", max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
                          emb_pretrained_files=emb_pretrained_files,
+                         vocab_init_files=vocab_init_files, concat_sequence=concat_sequence,
                          only_include_pretrained_words=only_include_pretrained_words,
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)

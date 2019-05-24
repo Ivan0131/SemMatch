@@ -24,7 +24,8 @@ def save_to_txt(items, filename):
 def load_from_txt(filename):
     with open(filename, 'r', encoding='utf-8') as txt_file:
         lines = txt_file.readlines()
-        items = [line.strip('\n') for line in lines]
+        lines = [line.strip('\n') for line in lines]
+        items = [line.split()[0] if line.strip() != "" else line for line in lines]
         return items
 
 
@@ -68,6 +69,7 @@ class IndexToTokenDict(ConditionDefaultDict):
 class Vocabulary(object):
     def __init__(self, counter=None, non_padded_namespaces=DEFAULT_NON_PADDED_NAMESPACES,
                  non_unk_namespace=DEFAULT_NON_UNK_NAMESPACES,
+                 vocab_init_files: Dict[str, str] = None,
                  pretrained_files=None, only_include_pretrained_words=False):
         self._padding_token = DEFAULT_PADDING_TOKEN
         self._oov_token = DEFAULT_OOV_TOKEN
@@ -77,6 +79,11 @@ class Vocabulary(object):
                                                 self._padding_token, self._oov_token)
         self._index_to_token = IndexToTokenDict(self._non_padded_namespaces, self._non_unk_namespace,
                                                 self._padding_token, self._oov_token)
+        if vocab_init_files is not None:
+            for namespace, vocab_path in vocab_init_files.items():
+                vocab_namespace = load_from_txt(vocab_path)
+                self._index_to_token[namespace] = dict((index, token) for index, token in enumerate(vocab_namespace))
+                self._token_to_index[namespace] = dict((token, index) for index, token in enumerate(vocab_namespace))
         self._namespace_to_path = dict()
         self._extend(counter, pretrained_files=pretrained_files,
                      only_include_pretrained_words=only_include_pretrained_words)
@@ -181,7 +188,7 @@ class Vocabulary(object):
                 pretrained_path = pretrained_files[namespace]
                 with open(pretrained_path, 'r', encoding='utf-8') as embeddings_file:
                     for line in tqdm.tqdm(embeddings_file):
-                        token = line.split(' ', 1)[0]
+                        token = line.rstrip().split(' ', 1)[0]
                         fields = line.rstrip().split(' ')
                         if len(fields) != 2:
                             pretrained_list.append(token)
@@ -217,7 +224,7 @@ class Vocabulary(object):
         return self._index_to_token[namespace]
 
     @classmethod
-    def init_from_instances(cls, instances, pretrained_files=None, only_include_pretrained_words=False):
+    def init_from_instances(cls, instances, vocab_init_files=None, pretrained_files=None, only_include_pretrained_words=False):
         logger.info("create vocab from instance")
         namespace_counter = collections.defaultdict(lambda: collections.defaultdict(int))
         try:
@@ -226,6 +233,7 @@ class Vocabulary(object):
         except StopIteration as e:
             logger.error("The data reader builds vocabulary error with StopIteration.")
         return cls(namespace_counter, pretrained_files=pretrained_files,
+                   vocab_init_files=vocab_init_files,
                    only_include_pretrained_words=only_include_pretrained_words)
 
     def get_vocab_path(self, namespace):

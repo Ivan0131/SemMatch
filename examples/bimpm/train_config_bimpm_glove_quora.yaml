@@ -14,7 +14,7 @@ model:
   name: 'bimpm'
   num_classes: 2
   hidden_dim: 100
-  keep_prob: 0.9
+  dropout_rate: 0.1
   embedding_mapping:
     name: 'base'
     encoders:

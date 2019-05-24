@@ -7,6 +7,8 @@ import requests
 from urllib.error import HTTPError
 from urllib.request import urlretrieve
 import nltk
+from nltk.corpus import wordnet
+
 
 
 def cpu_count():
@@ -134,3 +136,54 @@ def get_exact_match(premise, hypothesis):
             hypothesis_exact_match.append(i)
 
     return premise_exact_match, hypothesis_exact_match
+
+#
+# def get_antonyms(premise, hypothesis):
+#     stemmer = nltk.stem.LancasterStemmer()
+#     premise = [token.text for token in premise]
+#     hypothesis = [token.text for token in hypothesis]
+#     premise_stem = [stemmer.stem(token) for token in premise]
+#     hypothesis_stem = [stemmer.stem(token) for token in hypothesis]
+#     premise_antonyms = []
+#     for i, token in enumerate(premise):
+#         word_antonyms = get_antonyms_from_word(token)
+#         for ant in word_antonyms:
+#             ant_stem = stemmer.stem(ant)
+#             if ant_stem in hypothesis_stem:
+#                 premise_antonyms.append(i)
+#                 break
+#
+#     hypothesis_antonyms = []
+#     for i, token in enumerate(hypothesis):
+#         word_antonyms = get_antonyms_from_word(token)
+#         for ant in word_antonyms:
+#             if ant in premise:
+#                 hypothesis_antonyms.append(i)
+#                 break
+#
+#     return premise_antonyms, hypothesis_antonyms
+#
+#
+# def get_antonyms_from_word(word):
+#     synonyms_list = set()
+#     #antonyms_list = set()
+#     for synset in wordnet.synsets(word):
+#         for lemma in synset.lemmas():
+#             synonyms_list.add(lemma.name())
+#             # if lemma.antonyms():
+#             #     lemma_ant = lemma.antonyms()[0].name()
+#             #     antonyms_list.add(lemma_ant)
+#     return synonyms_list
+#
+#
+# if __name__ == "__main__":
+#     from semmatch.data.tokenizers import Token, WhiteWordSplitter, WordTokenizer
+#     tokenizer = WordTokenizer(word_splitter = WhiteWordSplitter())
+#     sent1 = " -LRB-    Read  for    Slate \\'s  take   on   Jackson \\'s  findings      .  -RRB-  "
+#     sent2 = " Slate   had   an opinion   on   Jackson \\'s  findings     .  "
+#     #get_antonyms_from_word("take")
+#     sent1 = tokenizer.tokenize(sent1)
+#     sent2 = tokenizer.tokenize(sent2)
+#     get_antonyms(sent1, sent2)
+#     ant_sent1 = [5]
+#     ant_sent2 = [1]

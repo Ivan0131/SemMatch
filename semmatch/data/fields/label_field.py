@@ -3,10 +3,10 @@ import tensorflow as tf
 
 
 class LabelField(Field):
-    def __init__(self, label, label_namespace="labels"):
+    def __init__(self, label, namespace="labels"):
         super().__init__()
         self.label = label
-        self._label_namespace = label_namespace
+        self._label_namespace = namespace
         self._label_id = None
 
     def count_vocab(self, counter):

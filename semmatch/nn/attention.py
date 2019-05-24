@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def similarity_function(query, key, func=None, initializer_range=0.02, scope="similar_func"):
+def similarity_function(query, key, func=None, initializer=tf.contrib.layers.xavier_initializer(), scope="similar_func"):
     with tf.variable_scope(scope):
         if func is None:
             func = "dot"
@@ -14,7 +14,7 @@ def similarity_function(query, key, func=None, initializer_range=0.02, scope="si
             key_new = tf.tile(tf.expand_dims(query, 1), [1, query_length, 1, 1])
             new_mat = tf.concat([query_new, key_new, query_new * key_new], axis=3)
             sim_mat = tf.layers.dense(new_mat, 1, activation=None, name="arg",
-                                      kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                      kernel_initializer=initializer)
             sim_mat = tf.squeeze(sim_mat, axis=3)
         else:
             raise Exception("%s similarity function is not found." % func)
@@ -22,9 +22,9 @@ def similarity_function(query, key, func=None, initializer_range=0.02, scope="si
 
 
 def _get_similar_matrix(query, key, query_len=None, key_len=None, func='dot',
-                        initializer_range=0.02, scope="similar_mat"):
+                        initializer=tf.contrib.layers.xavier_initializer(), scope="similar_mat"):
     with tf.variable_scope(scope):
-        sim_mat = similarity_function(query, key, func=func, initializer_range=initializer_range)
+        sim_mat = similarity_function(query, key, func=func, initializer=initializer)
         assert key_len is not None
         if query_len is not None:
             mask = tf.expand_dims(tf.sequence_mask(query_len, tf.shape(query)[1], dtype=tf.float32), axis=2) * \
@@ -74,23 +74,23 @@ def uni_attention(query, key, key_len, value=None, func="dot", name='uni_attenti
             return tf.matmul(sim_prob, key)
 
 
-def self_attention(query, query_len, func='dot', initializer_range=0.02, scope='self_attention'):
+def self_attention(query, query_len, func='dot', initializer=tf.contrib.layers.xavier_initializer(), scope='self_attention'):
     with tf.variable_scope(scope):
         sim_mat = _get_similar_matrix(query, query, query_len=query_len, key_len=query_len, func=func,
-                                      initializer_range=initializer_range)
+                                      initializer=initializer)
         sim_prob = tf.nn.softmax(sim_mat)
         return tf.matmul(sim_prob, query)
 
 
-def fuse_gate(lhs, rhs, initializer_range=0.02, self_att_fuse_gate_residual_conn=True, two_gate_fuse_gate=True,
+def fuse_gate(lhs, rhs, initializer=tf.contrib.layers.xavier_initializer(), self_att_fuse_gate_residual_conn=True, two_gate_fuse_gate=True,
               self_att_fuse_gate_relu_z=False, scope="fuse_gate"):
     with tf.variable_scope(scope):
         dim = lhs.get_shape().as_list()[-1]
 
         lhs_1 = tf.layers.dense(lhs, dim, activation=None, name="lhs_1",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
         rhs_1 = tf.layers.dense(rhs, dim, activation=None, name="rhs_1",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
 
         if self_att_fuse_gate_residual_conn and self_att_fuse_gate_relu_z:
             z = tf.nn.relu(lhs_1+rhs_1)
@@ -98,16 +98,16 @@ def fuse_gate(lhs, rhs, initializer_range=0.02, self_att_fuse_gate_residual_conn
             z = tf.tanh(lhs_1+rhs_1)
 
         lhs_2 = tf.layers.dense(lhs, dim, activation=tf.nn.sigmoid, name="lhs_2",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
         rhs_2 = tf.layers.dense(rhs, dim, activation=tf.nn.sigmoid, name="rhs_2",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
         f = tf.sigmoid(lhs_2 + rhs_2)
 
         if two_gate_fuse_gate:
             lhs_3 = tf.layers.dense(lhs, dim, activation=tf.nn.sigmoid, name="lhs_3",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
             rhs_3 = tf.layers.dense(rhs, dim, activation=tf.nn.sigmoid, name="rhs_3",
-                                kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+                                kernel_initializer=initializer)
             f2 = tf.sigmoid(lhs_3 + rhs_3)
             out = f * lhs + f2 * z
         else:
@@ -115,6 +115,20 @@ def fuse_gate(lhs, rhs, initializer_range=0.02, self_att_fuse_gate_residual_conn
 
         return out
 
+
+def attention_pool(seq, hidden_units, seq_len, initializer=tf.contrib.layers.xavier_initializer(), name='attention_pool'):
+    with tf.variable_scope(name):
+        w = tf.get_variable("attention_weight", shape=(hidden_units, 1), dtype=tf.float32, initializer=initializer)
+        alpha = tf.layers.dense(seq, hidden_units, activation=tf.nn.tanh, kernel_initializer=initializer)
+        alpha = tf.tensordot(alpha, w, [[-1], [0]]) #tf.matmul(alpha, w)
+        if seq_len is not None:
+            mask = tf.expand_dims(tf.sequence_mask(seq_len, tf.shape(seq)[1], dtype=tf.float32), axis=2)
+            alpha = alpha + (1. - mask) * tf.float32.min
+
+        alpha_softmax = tf.nn.softmax(alpha, -2)
+        out = alpha_softmax * seq
+        out = tf.reduce_sum(out, axis=-2)
+        return out
 
 
 if __name__ == "__main__":

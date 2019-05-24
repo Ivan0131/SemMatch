@@ -16,15 +16,15 @@ import gzip
 @register.register_subclass("encoder", 'embedding')
 class Embedding(Encoder):
     def __init__(self, embedding_dim: int, num_embeddings: int = None, projection_dim: int = None,
-                 vocab: Vocabulary = None, vocab_namespace: str = None, keep_prob: float = 1.0, padding_zero: bool = False,
+                 vocab: Vocabulary = None, vocab_namespace: str = None, dropout_rate: float = 0.0, padding_zero: bool = False,
                  trainable: bool = True, pretrained_file: str = None, tmp_dir=None, encoder_name="embedding"):
-        super().__init__(encoder_name=encoder_name)
+        super().__init__(encoder_name=encoder_name, vocab_namespace=vocab_namespace)
         if num_embeddings is None:
             num_embeddings = vocab.get_vocab_size(vocab_namespace)
         self._num_embeddings = num_embeddings
         self._embedding_dim = embedding_dim
         self._projection_dim = projection_dim
-        self._dropout_prob = 1-keep_prob
+        self._dropout_rate = dropout_rate
         if pretrained_file:
             weight = _read_pretrained_embeddings(pretrained_file, tmp_dir, embedding_dim, vocab, vocab_namespace)
         else:
@@ -72,7 +72,11 @@ class Embedding(Encoder):
                                                            initializer=self._weight, trainable=self._trainable)
                             # tf.Variable(self._weight, trainable=self._trainable, name='embedding_weight')
                     emb = tf.nn.embedding_lookup(self._embeddings, feature)
-                    emb_drop = tf.layers.dropout(emb, self._dropout_prob, training=is_training)
+
+                    dropout_rate = params.get('dropout_rate')
+                    if dropout_rate is None:
+                        dropout_rate = self._dropout_rate
+                    emb_drop = tf.layers.dropout(emb, dropout_rate, training=is_training)
                     if self._projection_dim:
                         emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False, kernel_initializer=initializers.xavier_initializer())
                     outputs[feature_key] = emb_drop
@@ -85,7 +89,7 @@ class Embedding(Encoder):
         pretrained_file = params.pop("pretrained_file", None)
         projection_dim = params.pop_int("projection_dim", None)
         trainable = params.pop_bool("trainable", True)
-        keep_prob = params.pop_float("keep_prob", 1.0)
+        dropout_rate = params.pop_float("dropout_rate", 0.0)
         encoder_name = params.pop("encoder_name", "embedding")
         tmp_dir = params.pop("tmp_dir", None)
         vocab_namespace = params.pop('namespace', 'tokens')
@@ -95,7 +99,7 @@ class Embedding(Encoder):
         return cls(num_embeddings=num_embeddings,
                    embedding_dim=embedding_dim,
                    projection_dim=projection_dim,
-                   keep_prob=keep_prob, padding_zero=padding_zero,
+                   dropout_rate=dropout_rate, padding_zero=padding_zero,
                    pretrained_file=pretrained_file, vocab=vocab, vocab_namespace=vocab_namespace,
                    trainable=trainable, encoder_name=encoder_name, tmp_dir=tmp_dir)
 

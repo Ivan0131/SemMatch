@@ -12,13 +12,13 @@ from semmatch import nn
 @register.register_subclass('model', 'bimpm')
 class BIMPM(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 100, keep_prob: float = 0.9, char_hidden_size: int = 50, num_perspective: int = 20,
+                 hidden_dim: int = 100, dropout_rate: float = 0.1, char_hidden_size: int = 50, num_perspective: int = 20,
                  model_name: str = 'bilstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = 1-keep_prob
+        self._dropout_rate = dropout_rate
         self._char_hidden_size = char_hidden_size
         self._num_perspective = num_perspective
 
@@ -148,8 +148,8 @@ class BIMPM(Model):
                 p = tf.concat([p, char_p], axis=-1)
                 h = tf.concat([h, char_h], axis=-1)
 
-            p = tf.layers.dropout(p, self._dropout_prob, training=is_training)
-            h = tf.layers.dropout(h, self._dropout_prob, training=is_training)
+            p = tf.layers.dropout(p, self._dropout_rate, training=is_training)
+            h = tf.layers.dropout(h, self._dropout_rate, training=is_training)
 
             # ----- Context Representation Layer -----
             with tf.variable_scope("context_representation", reuse=tf.AUTO_REUSE):
@@ -160,8 +160,8 @@ class BIMPM(Model):
                 con_h, _ = nn.bi_lstm(h, self._hidden_dim, name="context_representation_bilstm")
                 con_h = tf.concat(con_h, axis=-1)
 
-            con_p = tf.layers.dropout(con_p, self._dropout_prob, training=is_training)
-            con_h = tf.layers.dropout(con_h, self._dropout_prob, training=is_training)
+            con_p = tf.layers.dropout(con_p, self._dropout_rate, training=is_training)
+            con_h = tf.layers.dropout(con_h, self._dropout_rate, training=is_training)
 
             # (batch, seq_len, hidden_size)
             con_p_fw, con_p_bw = tf.split(con_p, num_or_size_splits=2, axis=-1)
@@ -250,8 +250,8 @@ class BIMPM(Model):
                  mv_h_full_bw, mv_h_max_bw, mv_h_att_mean_bw, mv_h_att_max_bw], axis=2
             )
 
-            mv_p = tf.layers.dropout(mv_p, self._dropout_prob, training=is_training)
-            mv_h = tf.layers.dropout(mv_h, self._dropout_prob, training=is_training)
+            mv_p = tf.layers.dropout(mv_p, self._dropout_rate, training=is_training)
+            mv_h = tf.layers.dropout(mv_h, self._dropout_rate, training=is_training)
 
             # ----- Aggregation Layer -----
             with tf.variable_scope("aggregation_layer", reuse=tf.AUTO_REUSE):
@@ -262,7 +262,7 @@ class BIMPM(Model):
                 _, (h_states, _) = nn.bi_lstm(mv_h, self._hidden_dim)
 
                 x = tf.concat([p_states, h_states], axis=-1)
-            x = tf.layers.dropout(x, self._dropout_prob, training=is_training)
+            x = tf.layers.dropout(x, self._dropout_rate, training=is_training)
 
             # ----- Prediction Layer -----
 
@@ -272,7 +272,7 @@ class BIMPM(Model):
                                             activation=tf.tanh,
                                             kernel_initializer=tf.random_uniform_initializer(-0.005, 0.005),
                                             bias_initializer=tf.constant_initializer(value=0.0, dtype=tf.float32))
-            x = tf.layers.dropout(x, self._dropout_prob, training=is_training)
+            x = tf.layers.dropout(x, self._dropout_rate, training=is_training)
             logits = tf.layers.dense(x, self._num_classes,
                                             activation=tf.tanh,
                                             kernel_initializer=tf.random_uniform_initializer(-0.005, 0.005),

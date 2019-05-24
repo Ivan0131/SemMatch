@@ -1,0 +1,29 @@
+data:
+  name: "general" # or quora_data_reader
+  data_path: '.'
+  tmp_path: './elmo/'
+  test_filename: 'input.jsonl'
+  batch_size: 3
+
+  field_mapping:
+    premise: 'question'
+    hypothesis: 'answer'
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "nltk_splitter"
+      do_lower_case: 'False'
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
+
+embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'elmo'
+        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        namespace: 'elmo_characters'
+
+output_file: 'output.txt'

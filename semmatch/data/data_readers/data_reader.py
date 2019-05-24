@@ -21,7 +21,7 @@ def cast_ints_to_int32(features):
   f = {}
   for k, v in sorted(six.iteritems(features)):
     if v.dtype in [tf.int64, tf.uint8]:
-      v = tf.to_int32(v)
+      v = tf.cast(v, tf.int32)
     f[k] = v
   return f
 
@@ -38,6 +38,7 @@ class DataReader(InitFromParams):
     def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32,
                  train_filename: str = None, valid_filename: str = None, test_filename: str = None,
                  predict_filename: str = None, max_length: int = None,
+                 vocab_init_files:Dict[str, str] = None, concat_sequence = False,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
@@ -57,11 +58,11 @@ class DataReader(InitFromParams):
         self._max_length = max_length
         self._emb_pretrained_files = emb_pretrained_files
         self._only_include_pretrained_words = only_include_pretrained_words
-
+        self._vocab_init_files = vocab_init_files
+        self._concat_sequence = concat_sequence
 
     def get_data_name(self):
         return self._data_name
-
 
     def get_filename_by_mode(self, mode):
         filename = self._mode_2_filename.get(mode, None)
@@ -157,6 +158,18 @@ class DataReader(InitFromParams):
                 example_proto, context_features=features[1],
                 sequence_features=features[0])
             parsed_features = {**context_parsed, **sequence_parsed}
+            if self._concat_sequence:
+                new_parsed_features = dict()
+                for feature_key, feature_tensor in parsed_features.items():
+                    feature_name, field_name = feature_key.split("/")
+                    if feature_name == 'premise':
+                        hypothesis_key = "hypothesis"+'/'+field_name
+                        hypothesis_tensor = parsed_features[hypothesis_key]
+                        concat_tensor = tf.concat([feature_tensor, hypothesis_tensor[1:]], axis=0)
+                        new_parsed_features[feature_key] = concat_tensor
+                    else:
+                        new_parsed_features[feature_key] = feature_tensor
+                parsed_features = new_parsed_features
             return parsed_features
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
@@ -248,11 +261,13 @@ class DataReader(InitFromParams):
         vocab_dir = os.path.join(self._tmp_path, VOCABULARY_DIR)
         logger.info("get or create vocabulary from %s.", vocab_dir)
         vocab = vocabulary.Vocabulary(pretrained_files=self._emb_pretrained_files,
+                                      vocab_init_files=self._vocab_init_files,
                                       only_include_pretrained_words=self._only_include_pretrained_words)
         if not vocab.load_from_files(vocab_dir):
             instances = self.read(DataSplit.TRAIN)
             vocab = vocabulary.Vocabulary.init_from_instances(instances,
                                                               pretrained_files=self._emb_pretrained_files,
+                                                              vocab_init_files=self._vocab_init_files,
                                                               only_include_pretrained_words=self._only_include_pretrained_words)
             vocab.save_to_files(vocab_dir)
         return vocab

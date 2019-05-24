@@ -1,0 +1,38 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  max_length: 48
+  batch_size: 128
+  tmp_path: "../data/quora/glove_limit"
+
+model:
+  name: 'mvlstm'
+  num_classes: 2
+  sim_func: 'bilinear'
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "False"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/mvlstm_glove_quora_bilinear/embedding"
+        namespace: 'tokens'
+        dropout_rate: 0.5
+      labels:
+        name: 'one_hot'
+        n_values: 2
+        namespace: 'labels'
+  optimizer:
+    name: 'adagrad'
+    learning_rate: 0.03
+run_config:
+  model_dir: './outputs/mvlstm_glove_quora_bilinear/'
+hparams:
+  eval_steps: 316
+  early_stopping_max_steps_without_decrease: 200000
+  early_stopping_min_steps: 20000
+
+
+

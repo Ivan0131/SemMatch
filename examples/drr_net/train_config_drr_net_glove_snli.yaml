@@ -1,0 +1,63 @@
+data:
+  name: "snli"
+  data_path: '../data/snli'
+  batch_size: 70
+  tmp_path: "../data/snli/glove_drrnet"
+  tokenizer:
+    name: 'spacy_tokenizer'
+  token_indexers:
+    tokens:
+      name: "single_id"
+    chars:
+      name: "chars"
+      max_word_length: 16
+    pos_tags:
+      name: "pos_tags"
+    exact_match_labels:
+      name: "fields"
+      field_name: 'exact_match'
+      namespace: 'exact_match_labels'
+
+model:
+  name: 'drr_net'
+  num_classes: 3
+  hidden_dim: 256
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'embedding'
+        embedding_dim: 300
+        trainable: "True"
+        padding_zero: "True"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/esim_drr_net_glove_snli_2/embedding"
+        namespace: 'tokens'
+      chars:
+        name: 'embedding'
+        embedding_dim: 8
+        trainable: "True"
+        padding_zero: "True"
+        namespace: 'chars'
+      labels:
+        name: 'one_hot'
+        n_values: 3
+        namespace: 'labels'
+      pos_tags:
+        name: 'one_hot'
+        n_values: 47
+        namespace: 'pos_tags'
+
+  optimizer:
+    name: 'adam'
+    learning_rate: 0.0001
+
+run_config:
+  model_dir: './outputs/esim_drr_net_glove_snli_2/'
+hparams:
+  eval_steps: 143
+  early_stopping_max_steps_without_decrease: 1000000
+  early_stopping_min_steps: 100000
+
+
+

@@ -20,6 +20,7 @@ class WordSplitter(InitFromParams):
     def split_words(self, sentence: str) -> List[Token]:
         raise NotImplementedError
 
+
 @register.register_subclass("word_splitter", "regex_word_splitter")
 class RegexWordSplitter(WordSplitter):
     def split_words(self, sentence: str) -> List[Token]:

@@ -7,7 +7,8 @@
 | BiMPM (not using the same version of quora) | Quora Dev| 88.69% (Accuracy)| 86.3% |
 | Decomposable-Attention |SNLI Test| 86.3% (Accuracy)| 84.0%|
 | match-LSTM| SNLI Test | 86.1% (Accuracy) | 84.1%|
-| DIIN| Multinli Test Match | 78.8% (Accuracy) | 75.4%|
+| DIIN| Multinli Test Match | 78.8% (Accuracy) | 77.3%|
+| BERT| Quora Test | 72.1(F1-Score)| 70.3 |
 
 Multinli数据集 Accuracy
 
@@ -21,7 +22,18 @@ Quora数据集 F1-Score/Accuracy
 | :------: | :------: | :------: |
 |ESIM | 80.5/84.3  | 60.5/81.5 |
 |BiMPM | 82.3/86.3 | 62.8/84.0 | 
+|MCAN | 81.7/86.5 | 63.8/85.7 |
+|BERT| 86.3/89.9|  70.3/88.8 |
 
+## 实现的模型
+
+1. ESIM：[Enhanced LSTM for Natural Language Inference](https://arxiv.org/abs/1609.06038)
+2. BiMPM: [Bilateral Multi-Perspective Matching for Natural Language Sentences](https://arxiv.org/abs/1702.03814)
+3. Decomposable-Attention: [A Decomposable Attention Model for Natural Language Inference](https://arxiv.org/abs/1606.01933)
+4. DIIN: [Natural Language Inference over Interaction Space](https://arxiv.org/abs/1709.04348)
+5. match_LSTM: [Learning Natural Language Inference with LSTM](https://www.aclweb.org/anthology/N16-1170)
+6. MCAN [Multi-Cast Attention Networks for Retrieval-based Question Answering and Response Prediction](https://arxiv.org/abs/1806.00778)
+7. BERT [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
 ## INSTALL
 ```
 git clone https://git.sogou-inc.com/hangzhou_research/SemMatch.git
@@ -266,4 +278,9 @@ class BiLSTM(Model):
 * 常用的函数，模块的整理，例如 attention等
 
 
-
+##参考
+1. [AllenNLP](https://github.com/allenai/allennlp)
+2. [Baseline Models for MultiNLI Corpus](https://github.com/nyu-mll/multiNLI)
+3. [Densely Interactive Inference Network (DIIN)](https://github.com/YichenGong/Densely-Interactive-Inference-Network)
+4. [BERT](https://github.com/google-research/bert)
+5. [bilm-tf](https://github.com/allenai/bilm-tf)

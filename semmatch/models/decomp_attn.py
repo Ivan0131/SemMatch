@@ -4,6 +4,7 @@ from semmatch.utils import register
 from semmatch.utils.exception import ConfigureError
 from semmatch.modules.embeddings import EmbeddingMapping
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
+from semmatch.modules.embeddings.encoders import Bert
 from semmatch import nn
 
 
@@ -13,13 +14,13 @@ from semmatch import nn
 class DecomposableAttention(Model):
     #Model diverged with loss = NaN.
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 200, keep_prob:float = 0.8,
+                 hidden_dim: int = 200, dropout_rate: float = 0.2,
                  model_name: str = 'bilstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = 1-keep_prob
+        self._dropout_rate = dropout_rate
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -44,7 +45,15 @@ class DecomposableAttention(Model):
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
             if features.get('premise/elmo_characters', None) is not None:
                 prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+            if features.get('hypothesis/elmo_characters', None) is not None:
                 hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
+            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+                hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
             # prem_mask = tf.expand_dims(prem_mask, -1)
             # hyp_mask = tf.expand_dims(hyp_mask, -1)
 
@@ -56,8 +65,8 @@ class DecomposableAttention(Model):
                 hypothesis_tokens = features_embedding.get('hypothesis/elmo_characters', None)
 
             with tf.variable_scope("Attend"):
-                F_a_bar = self._feedForwardBlock(premise_tokens, self._hidden_dim, 'F')
-                F_b_bar = self._feedForwardBlock(hypothesis_tokens, self._hidden_dim, 'F', isReuse=True)
+                F_a_bar = self._feedForwardBlock(premise_tokens, self._hidden_dim, 'F', is_training=is_training)
+                F_b_bar = self._feedForwardBlock(hypothesis_tokens, self._hidden_dim, 'F', isReuse=True, is_training=is_training)
 
                 # e_i,j = F'(a_hat, b_hat) = F(a_hat).T * F(b_hat) (1)
                 #alignment_attention = Attention(self.hidden_size, self.hidden_size)
@@ -71,8 +80,8 @@ class DecomposableAttention(Model):
 
                 # v_1,i = G([a_bar_i, beta_i])
                 # v_2,j = G([b_bar_j, alpha_j]) (3)
-                v_1 = self._feedForwardBlock(a_beta, self._hidden_dim, 'G')
-                v_2 = self._feedForwardBlock(b_alpha, self._hidden_dim, 'G', isReuse=True)
+                v_1 = self._feedForwardBlock(a_beta, self._hidden_dim, 'G', is_training=is_training)
+                v_2 = self._feedForwardBlock(b_alpha, self._hidden_dim, 'G', isReuse=True, is_training=is_training)
 
             with tf.variable_scope("Aggregate"):
                 # v1 = \sum_{i=1}^l_a v_{1,i}
@@ -83,7 +92,7 @@ class DecomposableAttention(Model):
                 # y_hat = H([v1, v2]) (5)
                 v = tf.concat([v1_sum, v2_sum], axis=1)
 
-                ff_outputs = self._feedForwardBlock(v, self._hidden_dim, 'H')
+                ff_outputs = self._feedForwardBlock(v, self._hidden_dim, 'H', is_training=is_training)
 
                 logits = tf.layers.dense(ff_outputs, self._num_classes)
 
@@ -109,7 +118,7 @@ class DecomposableAttention(Model):
                 #                          tf.shape(alpha), tf.shape(beta)]
             return output_dict
 
-    def _feedForwardBlock(self, inputs, num_units, scope, isReuse = False, initializer = None):
+    def _feedForwardBlock(self, inputs, num_units, scope, is_training=True, isReuse = False, initializer = None):
         """
         :param inputs: tensor with shape (batch_size, seq_length, embedding_size)
         :param num_units: dimensions of each feed forward layer
@@ -121,10 +130,10 @@ class DecomposableAttention(Model):
                 initializer = tf.contrib.layers.xavier_initializer()
 
             with tf.variable_scope('feed_foward_layer1'):
-                inputs = tf.nn.dropout(inputs, 1 - self._dropout_prob)
+                inputs = tf.layers.dropout(inputs, self._dropout_rate, training=is_training)
                 outputs = tf.layers.dense(inputs, num_units, tf.nn.relu, kernel_initializer=initializer)
             with tf.variable_scope('feed_foward_layer2'):
-                outputs = tf.nn.dropout(outputs, 1 - self._dropout_prob)
+                outputs = tf.layers.dropout(outputs, self._dropout_rate, training=is_training)
                 resluts = tf.layers.dense(outputs, num_units, tf.nn.relu, kernel_initializer=initializer)
                 return resluts
 

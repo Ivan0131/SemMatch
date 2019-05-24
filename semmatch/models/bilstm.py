@@ -4,18 +4,20 @@ from semmatch.utils import register
 from semmatch.utils.exception import ConfigureError
 from semmatch.modules.embeddings import EmbeddingMapping
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
+from semmatch.modules.embeddings.encoders import Bert
 from semmatch import nn
 
 
 @register.register_subclass('model', 'bilstm')
 class BiLSTM(Model):
-    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(), hidden_dim: int = 300, keep_prob:float = 0.5,
+    def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
+                 hidden_dim: int = 300, dropout_rate:float = 0.5,
                  model_name: str = 'bilstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = 1-keep_prob
+        self._dropout_rate = dropout_rate
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -40,7 +42,16 @@ class BiLSTM(Model):
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
             if features.get('premise/elmo_characters', None) is not None:
                 prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+            if features.get('hypothesis/elmo_characters', None) is not None:
                 hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
+            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+                hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
+
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
 
@@ -76,11 +87,11 @@ class BiLSTM(Model):
             # MLP layer
             h_mlp = tf.contrib.layers.fully_connected(h, self._hidden_dim, scope='fc1')
             # Dropout applied to classifier
-            h_drop = tf.layers.dropout(h_mlp, self._dropout_prob, training=is_training)
+            h_drop = tf.layers.dropout(h_mlp, self._dropout_rate, training=is_training)
             # Get prediction
             logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
 
-            predictions = tf.argmax(logits, -1)
+            predictions = tf.cast(tf.argmax(logits, -1), tf.int32)
             output_dict = {'logits': logits, 'predictions': predictions}
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
@@ -96,7 +107,12 @@ class BiLSTM(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                #metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                metrics['map'] = tf.metrics.average_precision_at_k(labels=tf.cast(labels, tf.int64), predictions=logits,
+                                                                   k=2)
+                metrics['precision_1'] = tf.metrics.precision_at_k(labels=tf.cast(labels, tf.int64), predictions=logits,
+                                                                   k=1, class_id=1)
+
+                    #tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,
                 #                          premise_ave, hypothesis_ave, diff, mul, h, h_mlp, logits]

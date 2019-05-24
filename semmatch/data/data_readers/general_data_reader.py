@@ -19,12 +19,15 @@ class GeneralDataReader(data_reader.DataReader):
     def __init__(self, data_name: str = "general", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
                  train_filename: str = None, valid_filename: str = None, test_filename: str = None,
                  field_mapping: Dict = None,
+                 concat_sequence: bool = False,
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
+                 vocab_init_files: Dict[str, str] = None,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
                          emb_pretrained_files=emb_pretrained_files,
-                         only_include_pretrained_words=only_include_pretrained_words,
+                         vocab_init_files=vocab_init_files,
+                         only_include_pretrained_words=only_include_pretrained_words, concat_sequence=concat_sequence,
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)
         self._tokenizer = tokenizer

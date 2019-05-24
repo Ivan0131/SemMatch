@@ -6,7 +6,7 @@ from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch.modules.embeddings import EmbeddingMapping
-#from tensorflow.python import debug as tf_debug
+from tensorflow.python import debug as tf_debug
 
 
 @register.register("model")
@@ -46,7 +46,20 @@ class Model(InitFromParams):
 
                     print_op = tf.group(*print_ops)
                     train_op = tf.group(print_op, train_op)
-                ########
+                # ########
+                # tvars = tf.trainable_variables()
+                # tgrads = tf.gradients(output_dict['loss'], tvars)
+                # lambda_est = []
+                # for grad, var in zip(tgrads, tvars):
+                #     tmp = tf.reduce_mean(tf.maximum(-grad*var / 2 * var ** 2, 0))
+                #     lambda_est.append(tmp)
+                # lambda_est = tf.stack(lambda_est, axis=0)
+                # lambda_est = tf.reduce_mean(lambda_est)
+                # lambda_mean, lambda_update = tf.metrics.mean(lambda_est)
+                # print_op = tf.print("l2 weight decay lambda value", lambda_mean, output_stream=sys.stdout)
+                # train_op = tf.group(train_op, print_op, lambda_update)
+                # #########
+                # ########
                 output_spec = tf.estimator.EstimatorSpec(mode, loss=output_dict['loss'], train_op=train_op,
                                                          export_outputs=output_dict.get("export_outputs", None),
                                                          predictions=output_dict.get('predictions', None),

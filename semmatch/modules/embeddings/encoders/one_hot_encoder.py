@@ -6,7 +6,7 @@ import tensorflow as tf
 @register.register_subclass("encoder", 'one_hot')
 class OneHotEncoder(Encoder):
     def __init__(self, n_values, on_value=1.0, off_value=0.0, axis=-1, dtype=tf.float32, vocab_namespace='labels', encoder_name='one_hot_encoder'):
-        super().__init__(encoder_name=encoder_name)
+        super().__init__(encoder_name=encoder_name, vocab_namespace=vocab_namespace)
         self._n_values = n_values
         self._on_value = on_value
         self._off_value = off_value

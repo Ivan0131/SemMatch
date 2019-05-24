@@ -9,7 +9,7 @@ model:
   name: 'text_matching_bilstm'
   num_classes: 2
   hidden_dim: 300
-  keep_prob: 0.5
+  dropout_rate: 0.5
   embedding_mapping:
     name: 'base'
     encoders:

@@ -14,6 +14,7 @@ from tensorflow.python.keras import initializers
 from tensorflow.python.keras import activations
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import partitioned_variables
+from semmatch.modules.embeddings.encoders import Bert
 from tensorflow.python.ops import init_ops
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
@@ -24,13 +25,13 @@ from tensorflow.python.ops import nn_ops
 @register.register_subclass('model', 'mlstm')
 class MatchLSTM(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer = AdamOptimizer(),
-                 hidden_dim: int = 300, keep_prob: float = 0.5,
+                 hidden_dim: int = 300, dropout_rate: float = 0.5,
                  model_name: str = 'mlstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._hidden_dim = hidden_dim
-        self._dropout_prob = 1 - keep_prob
+        self._dropout_rate = dropout_rate
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -55,7 +56,15 @@ class MatchLSTM(Model):
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
             if features.get('premise/elmo_characters', None) is not None:
                 prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+            if features.get('hypothesis/elmo_characters', None) is not None:
                 hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
+            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = prem_mask[:, 1:-1]
+                prem_seq_lengths -= 2
+                hyp_mask = hyp_mask[:, 1:-1]
+                hyp_seq_lengths -= 2
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
 

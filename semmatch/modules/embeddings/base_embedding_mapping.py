@@ -12,15 +12,21 @@ class EmbeddingMapping(InitFromParams):
     def forward(self, features, labels, mode, params):
         raise NotImplementedError
 
+    def get_encoder(self, name):
+        raise NotImplementedError
+
 
 @register.register_subclass('embedding_mapping', 'base')
 class BaseEmbeddingMapping(EmbeddingMapping):
     def __init__(self, encoders: List[Encoder]):
-        self._encoders = encoders
+        self._encoders = {encoder.get_namespace(): encoder for encoder in encoders}
+
+    def get_encoder(self, name):
+        return self._encoders[name]
 
     def get_warm_start_setting(self):
         warm_start_settings = None
-        for encoder in self._encoders:
+        for encoder in self._encoders.values():
             warm_start_settings_namespace = encoder.get_warm_start_setting()
             if isinstance(warm_start_settings_namespace, tf.estimator.WarmStartSettings):
                 if warm_start_settings is None:
@@ -36,7 +42,7 @@ class BaseEmbeddingMapping(EmbeddingMapping):
             logger.debug("%s:" % feature_key)
 
         outputs = dict()
-        for encoder in self._encoders:
+        for encoder in self._encoders.values():
             outputs_namespace = encoder.forward(features, labels, mode, params)
             outputs.update(outputs_namespace)
         return outputs

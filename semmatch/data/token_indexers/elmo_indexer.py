@@ -102,7 +102,7 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
         # pylint: disable=unused-argument
 
         texts = [token.text for token in tokens]
-
+        texts = [ELMoCharacterMapper.bos_token] + texts + [ELMoCharacterMapper.eos_token]
         if any(text is None for text in texts):
             raise ConfigureError('ELMoTokenCharactersIndexer needs a tokenizer '
                                      'that retains text')
@@ -111,7 +111,7 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
 
     def pad_token_sequence(self, tokens, max_length):
         if len(tokens) >= max_length:
-            tokens = tokens[:max_length]
+            tokens = tokens[:max_length-1]+[tokens[-1]]
             return tokens
         padding_tokens = [self.get_padding_values()]*ELMoCharacterMapper.max_word_length
         padding_tokens = [padding_tokens] * (max_length-len(tokens))

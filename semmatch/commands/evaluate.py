@@ -84,8 +84,8 @@ class Evaluate(Command):
                     print("processing %s/%s"%(num_batch, total_num))
                     #######################
                     #print(probs)
-                    predictions = probs #np.argmax(probs, axis=1)
-                    #predictions = (probs > 0.5).astype(np.int32)
+                    predictions = np.argmax(probs, axis=1)
+                    #predictions = (probs < 0.5).astype(np.int32)
                     #print(predictions)
                     y_true.append(true_label_val)
                     y_pred.append(predictions)
@@ -170,16 +170,16 @@ class Evaluate(Command):
         cls.parser = parser.add_parser(name=cls.name, description=cls.description, help='evaluate a model')
         cls.parser.add_argument('--config_path', type=str,
                                 help='the config path where store the params.')
-        cls.parser.set_defaults(func=cls.init_train_from_args)
+        cls.parser.set_defaults(func=cls.init_from_args)
         return cls.parser
 
     @classmethod
-    def init_train_from_args(cls, args):
+    def init_from_args(cls, args):
         config_path = args.config_path
-        cls.init_train_from_config_file(config_path)
+        cls.init_from_config_file(config_path)
 
     @classmethod
-    def init_train_from_config_file(cls, config_path):
+    def init_from_config_file(cls, config_path):
         params = Parameters.init_from_file(config_path)
         return cls.init_from_params(params)
 

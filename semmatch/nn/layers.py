@@ -1,26 +1,26 @@
 import tensorflow as tf
 
 
-def highway_layer(arg, output_size=None, initializer_range=0.02, scope=None):
+def highway_layer(arg, output_size=None, initializer=tf.contrib.layers.xavier_initializer(), scope=None):
     with tf.variable_scope(scope or "highway_layer"):
         if output_size is not None:
             d = output_size
         else:
             d = arg.get_shape()[-1]
-        trans = tf.layers.dense(arg, d, activation=tf.nn.relu, name="trans", kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
-        gate = tf.layers.dense(arg, d, activation=tf.nn.sigmoid, name="gate", kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+        trans = tf.layers.dense(arg, d, activation=tf.nn.relu, name="trans", kernel_initializer=initializer)
+        gate = tf.layers.dense(arg, d, activation=tf.nn.sigmoid, name="gate", kernel_initializer=initializer)
         if d != arg.get_shape()[-1]:
-            arg = tf.layers.dense(arg, d, activation=tf.nn.sigmoid, name="arg", kernel_initializer=tf.truncated_normal_initializer(stddev=initializer_range))
+            arg = tf.layers.dense(arg, d, activation=tf.nn.sigmoid, name="arg", kernel_initializer=initializer)
         out = gate * trans + (1 - gate) * arg
         return out
 
 
-def highway_network(arg, num_layers, output_size=None, initializer_range=0.02, dropout_rate=None, is_trainging=True, scope=None):
+def highway_network(arg, num_layers, output_size=None, initializer=tf.contrib.layers.xavier_initializer(), dropout_rate=None, is_trainging=True, scope=None):
     with tf.variable_scope(scope or "highway_network"):
         prev = arg
         cur = None
         for layer_idx in range(num_layers):
-            cur = highway_layer(prev, output_size=output_size, initializer_range=initializer_range,
+            cur = highway_layer(prev, output_size=output_size, initializer=initializer,
                                 scope="highway_laye_%s" % layer_idx)
             if dropout_rate:
                 cur = tf.layers.dropout(cur, dropout_rate, training=is_trainging)
@@ -58,28 +58,28 @@ def dense_net_transition_layer(feature_map, transition_rate, scope=None):
         return feature_map
 
 
-def multi_conv1d_max(inputs, filter_sizes, channels, padding="VALID", is_training=None, keep_prob=1.0, scope="multi_conv1d"):
+def multi_conv1d_max(inputs, filter_sizes, channels, padding="VALID", is_training=None, dropout_rate=0.0, scope="multi_conv1d"):
     with tf.variable_scope(scope):
         outs = []
         for layer_iter, (filter_size, channel) in enumerate(zip(filter_sizes, channels)):
             if filter_size == 0:
                 continue
             out = conv1d_max(inputs, filter_size, channel, padding, is_training=is_training,
-                             keep_prob=keep_prob, scope="conv1d_%s" % layer_iter)
+                             dropout_rate=dropout_rate, scope="conv1d_%s" % layer_iter)
             outs.append(out)
 
         concat_out = tf.concat(outs, axis=2)
         return concat_out
 
 
-def conv1d_max(in_, filter_size, channel, padding, is_training=None, keep_prob=1.0, scope=None):
+def conv1d_max(in_, filter_size, channel, padding, is_training=None, dropout_rate=0.0, scope=None):
     with tf.variable_scope(scope or "conv1d"):
         num_channels = in_.get_shape()[-1]
         filter_ = tf.get_variable("filter", shape=[1, filter_size, num_channels, channel], dtype='float')
         bias = tf.get_variable("bias", shape=[channel], dtype='float')
         strides = [1, 1, 1, 1]
         # if is_train is not None and keep_prob < 1.0:
-        in_ = tf.layers.dropout(in_, keep_prob, is_training)
+        in_ = tf.layers.dropout(in_, dropout_rate, is_training)
         xxc = tf.nn.conv2d(in_, filter_, strides, padding) + bias  # [N*M, JX, W/filter_stride, d]
         out = tf.reduce_max(tf.nn.relu(xxc), 2)  # [-1, JX, d]
         return out

@@ -20,6 +20,8 @@ class MRPCDataReader(data_reader.DataReader):
     _mrpc_dev_ids_url = 'https://firebasestorage.googleapis.com/v0/b/mtl-sentence-representations.appspot.com/o/data%2Fmrpc_dev_ids.tsv?alt=media&token=ec5c0836-31d5-48f4-b431-7480817f1adc'
 
     def __init__(self, data_name: str = "mrpc", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
+                 vocab_init_files: Dict[str, str] = None,
+                 concat_sequence: bool = False,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
                  train_filename="msr_paraphrase_train.txt",
                  valid_filename="msr_paraphrase_train.txt",
@@ -27,7 +29,8 @@ class MRPCDataReader(data_reader.DataReader):
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
-                         emb_pretrained_files=emb_pretrained_files,
+                         vocab_init_files=vocab_init_files,
+                         emb_pretrained_files=emb_pretrained_files, concat_sequence=concat_sequence,
                          only_include_pretrained_words=only_include_pretrained_words,
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)

@@ -42,36 +42,27 @@ class AdamAccumulateOptimizer(Optimizer):
 
             embedding_learning_rate = self._embedding_learning_rate * schedule
 
-            if self._weight_decay_rate == 0:
-                self._model_optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=self._beta1,
-                                                               beta2=self._beta2, epsilon=self._epsilon,
-                                                               name="adam_model_optimizer")
+            self._model_optimizer = AdamAccumulateWeightDecayOptimizer(
+                learning_rate=learning_rate,
+                weight_decay_rate=self._weight_decay_rate,
+                beta_1=self._beta1,
+                beta_2=self._beta2,
+                epsilon=self._epsilon,
+                amsgrad=self._amsgrad,
+                accum_iters=self._accum_iters,
+                name="adamw_model_optimizer")
 
-                self._embedding_optimizer = tf.train.AdamOptimizer(learning_rate=embedding_learning_rate,
-                                                                   beta1=self._beta1,
-                                                                   beta2=self._beta2, epsilon=self._epsilon,
-                                                                   name="adam_embedding_optimizer")
-            else:
-                self._model_optimizer = AdamAccumulateWeightDecayOptimizer(
-                    learning_rate=learning_rate,
-                    weight_decay_rate=self._weight_decay_rate,
-                    beta_1=self._beta_1,
-                    beta_2=self._beta_2,
-                    epsilon=self._beta_3,
-                    amsgrad=self._amsgrad,
-                    accum_iters=self._accum_iters,
-                    name="adamw_model_optimizer")
-
-                self._embedding_optimizer = AdamAccumulateWeightDecayOptimizer(
-                    learning_rate=embedding_learning_rate,
-                    weight_decay_rate=self._weight_decay_rate,
-                    beta_1=self._beta_1,
-                    beta_2=self._beta_2,
-                    epsilon=self._beta_3,
-                    amsgrad=self._amsgrad,
-                    accum_iters=self._accum_iters,
-                    name="adamw_embedding_optimizer")
+            self._embedding_optimizer = AdamAccumulateWeightDecayOptimizer(
+                learning_rate=embedding_learning_rate,
+                weight_decay_rate=self._weight_decay_rate,
+                beta_1=self._beta1,
+                beta_2=self._beta2,
+                epsilon=self._epsilon,
+                amsgrad=self._amsgrad,
+                accum_iters=self._accum_iters,
+                name="adamw_embedding_optimizer")
             return self._optimizer, self._embedding_optimizer
+
 
 
 class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
@@ -97,6 +88,13 @@ class AdamAccumulateWeightDecayOptimizer(tf.train.Optimizer):
         self.amsgrad = amsgrad
         self.weight_decay_rate = weight_decay_rate
         self._decay_var_list = None
+
+    def _get_variable_name(self, param_name):
+        """Get the variable name from the tensor name."""
+        m = re.match("^(.*):\\d+$", param_name)
+        if m is not None:
+            param_name = m.group(1)
+        return param_name
 
     def apply_gradients(self, grads_and_vars, global_step=None, decay_var_list=None, name=None):
         """See base class."""

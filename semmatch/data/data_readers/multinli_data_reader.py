@@ -28,6 +28,8 @@ class MultinliDataReader(data_reader.DataReader):
     _multinli_mismatched_test_path = "multinli_0.9/multinli_0.9_test_mismatched_unlabeled.jsonl"
 
     def __init__(self, data_name: str = "mnli", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
+                 vocab_init_files: Dict[str, str] = None,
+                 concat_sequence: bool = False,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
                  train_filename="multinli_0.9/multinli_0.9_train.jsonl",
                  valid_filename="multinli_0.9/multinli_0.9_dev_matched.jsonl",
@@ -39,7 +41,8 @@ class MultinliDataReader(data_reader.DataReader):
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(word_splitter = WhiteWordSplitter()),
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
-                         emb_pretrained_files=emb_pretrained_files,
+                         vocab_init_files=vocab_init_files,
+                         emb_pretrained_files=emb_pretrained_files, concat_sequence=concat_sequence,
                          only_include_pretrained_words=only_include_pretrained_words,
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)
@@ -49,6 +52,11 @@ class MultinliDataReader(data_reader.DataReader):
                                                   'pos_tags': PosTagIndexer(namespace='pos_tags'),
                                                   'exact_match_labels': FieldIndexer(namespace='exact_match_labels',
                                                                                      field_name='exact_match')}
+        self._cal_exact_match = False
+        for token_indexer_name, token_indexer in self._token_indexers.items():
+            if isinstance(token_indexer, FieldIndexer):
+                if token_indexer.get_field_name() == 'exact_match':
+                    self._cal_exact_match = True
 
     def _parsing_parse(self, parse):
         base_parse = [s.rstrip(" ").rstrip(")") for s in parse.split("(") if ")" in s]
@@ -58,13 +66,21 @@ class MultinliDataReader(data_reader.DataReader):
     def _read(self, mode: str):
         self._maybe_download_corpora(self._data_path)
 
+        extra_info = {}
+        with open(os.path.join(self._data_path, "shared.jsonl"), 'r') as jsonl_file:
+            for line in jsonl_file:
+                fields = line.split("\t")
+                id = fields[0]
+                d = json.loads(fields[1])
+                extra_info[id] = d
+
         filename = self.get_filename_by_mode(mode)
         if filename:
             file_path = os.path.join(self._data_path, filename)
 
-            with open(file_path, 'r') as snli_file:
+            with open(file_path, 'r') as mnli_file:
                 logger.info("Reading Multinli instances from jsonl dataset at: %s", file_path)
-                for line in snli_file:
+                for line in mnli_file:
                     fields = json.loads(line)
 
                     id = fields['pairID']
@@ -77,6 +93,11 @@ class MultinliDataReader(data_reader.DataReader):
                     sent2 = sent2.replace(' ', '')
                     sent1_pos = fields['sentence1_parse']
                     sent2_pos = fields['sentence2_parse']
+
+                    ant_feat_1 = extra_info[id]['sentence1_antonym_feature']
+                    ant_feat_2 = extra_info[id]['sentence2_antonym_feature']
+                    if len(ant_feat_1) or len(ant_feat_2):
+                        print(ant_feat_1, ant_feat_2)
 
                     if label == '-':
                         # These were cases where the annotators disagreed; we'll just skip them.  It's
@@ -112,9 +133,6 @@ class MultinliDataReader(data_reader.DataReader):
         premise_pos = self._parsing_parse(example['premise_pos'])
         hypothesis_pos = self._parsing_parse(example['hypothesis_pos'])
 
-        premise_exact_match, hypothesis_exact_match = \
-            data_utils.get_exact_match(tokenized_premise, tokenized_hypothesis)
-
         if len(tokenized_premise) != len(premise_pos):
             print(tokenized_premise)
             print(premise_pos)
@@ -132,17 +150,25 @@ class MultinliDataReader(data_reader.DataReader):
 
         for token, token_pos in zip(tokenized_premise, premise_pos):
             token.tag_ = token_pos
-            token.exact_match = 0
 
         for token, token_pos in zip(tokenized_hypothesis, hypothesis_pos):
             token.tag_ = token_pos
-            token.exact_match = 0
 
-        for ind in premise_exact_match:
-            tokenized_premise[ind].exact_match = 1
+        if self._cal_exact_match:
+            premise_exact_match, hypothesis_exact_match = \
+                data_utils.get_exact_match(tokenized_premise, tokenized_hypothesis)
 
-        for ind in hypothesis_exact_match:
-            tokenized_hypothesis[ind].exact_match = 1
+            for token in tokenized_premise:
+                token.exact_match = 0
+
+            for token in tokenized_hypothesis:
+                token.exact_match = 0
+
+            for ind in premise_exact_match:
+                tokenized_premise[ind].exact_match = 1
+
+            for ind in hypothesis_exact_match:
+                tokenized_hypothesis[ind].exact_match = 1
 
         fields['index'] = IndexField(example['id'])
         fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)

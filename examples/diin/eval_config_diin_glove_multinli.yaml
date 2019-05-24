@@ -18,5 +18,5 @@ data:
       namespace: 'exact_match_labels'
 
 #num_classes: 3
-export_dir: './outputs/esim_diin_glove_mnli/export/best_exporter/1556170309'
+export_dir: './outputs/esim_diin_glove_mnli_2/export/best_exporter/1557319981'
 output_file: "eval_report.tsv"

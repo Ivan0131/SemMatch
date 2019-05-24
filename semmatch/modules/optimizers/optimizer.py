@@ -102,7 +102,7 @@ class Optimizer(InitFromParams):
                 embedding_decay_var_list = None
 
             embedding_train_op = self._embedding_optimizer.apply_gradients(
-                zip(embedding_grads, embedding_tvars), global_step=global_step, decay_var_list=model_decay_var_list)
+                zip(embedding_grads, embedding_tvars), global_step=global_step, decay_var_list=embedding_decay_var_list)
             train_ops.append(embedding_train_op)
 
         new_global_step = global_step + 1

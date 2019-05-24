@@ -25,15 +25,15 @@ DTYPE = 'float32'
 class ELMo(Encoder):
     def __init__(self, config_file: str,
                  vocab_namespace: str, ckpt_to_initialize_from: str = None, weight_file: str = None,
-                 keep_prob: float = 1.0, projection_dim: int = None,
+                 dropout_rate: float = 0.0, projection_dim: int = None,
                  encoder_name="elmo"):
-        super().__init__(encoder_name=encoder_name)
+        super().__init__(encoder_name=encoder_name, vocab_namespace=vocab_namespace)
         # self._weight_file = weight_file
         self._vocab_namespace = vocab_namespace
         self._ckpt_to_initialize_from = ckpt_to_initialize_from
         self._config_file = config_file
         self._weight_file = weight_file
-        self._dropout_prob = 1 - keep_prob
+        self._dropout_rate = dropout_rate
         self._projection_dim = projection_dim
         #self._token_embedding_file = os.path.join(tmp_dir,  'elmo_token_embeddings.hdf5')
         #dump_token_embeddings(old_vocab_file, self._elmo_config, self._weight_file, self._token_embedding_file)
@@ -53,14 +53,19 @@ class ELMo(Encoder):
                 with tf.variable_scope("embedding/" + self._vocab_namespace):
                     input_ids = feature
                     embeddings_op = bilm(input_ids)
-                    with tf.variable_scope(self._encoder_name, reuse=tf.AUTO_REUSE):
-                        elmo_embeddings_input = weight_layers('input', embeddings_op, l2_coef=0.0)
-                        embedding_output = elmo_embeddings_input['weighted_op'] #embeddings_op['token_embeddings'][:, 1:-1, :] #
-                        emb_drop = tf.layers.dropout(embedding_output, self._dropout_prob, training=is_training)
-                    if self._projection_dim:
-                        emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False,
-                                                   kernel_initializer=initializers.xavier_initializer())
-                    outputs[feature_key] = emb_drop
+                with tf.variable_scope(self._encoder_name+"/"+self._vocab_namespace, reuse=tf.AUTO_REUSE):
+                    #embedding_output = embeddings_op['lm_embeddings'][0]
+                    elmo_embeddings_input = weight_layers('input', embeddings_op, l2_coef=0.0)
+                    embedding_output = elmo_embeddings_input['weighted_op'] #embeddings_op['token_embeddings'][:, 1:-1, :] #
+
+                    dropout_rate = params.get('dropout_rate')
+                    if dropout_rate is None:
+                        dropout_rate = self._dropout_rate
+                    emb_drop = tf.layers.dropout(embedding_output, dropout_rate, training=is_training)
+                if self._projection_dim:
+                    emb_drop = tf.layers.dense(emb_drop, self._projection_dim, use_bias=False,
+                                               kernel_initializer=initializers.xavier_initializer())
+                outputs[feature_key] = emb_drop
         #print(tf.trainable_variables())
         return outputs
 
@@ -93,6 +98,7 @@ class ELMo(Encoder):
         #     logger.warning("The ELMo embedding is initialize randomly.")
         encoder_name = params.pop("encoder_name", "elmo")
         vocab_namespace = params.pop('namespace', 'elmo_characters')
+        dropout_rate = params.pop_float('dropout_rate', 0.0)
 
         ckpt_to_initialize_from = params.pop('ckpt_to_initialize_from', None)
         weight_file = params.pop('weight_file', None)
@@ -108,7 +114,7 @@ class ELMo(Encoder):
 
         params.assert_empty(cls.__name__)
 
-        return cls(config_file=config_file, ckpt_to_initialize_from=ckpt_to_initialize_from,
+        return cls(config_file=config_file, ckpt_to_initialize_from=ckpt_to_initialize_from, dropout_rate=dropout_rate,
                    encoder_name=encoder_name, vocab_namespace=vocab_namespace, weight_file=weight_file)
 
 
@@ -578,11 +584,10 @@ class BidirectionalLanguageModelGraph(object):
 
         # the character embeddings
         with tf.device("/cpu:0"):
-            self.embedding_weights = tf.concat([tf.get_variable(
-                "char_embed", [n_chars-1, char_embed_dim],
-                dtype=DTYPE,
-                initializer=tf.random_uniform_initializer(-1.0, 1.0)
-            ), tf.get_variable("pad_embed", [1, char_embed_dim], dtype=DTYPE, initializer=tf.zeros_initializer)],
+            self.embedding_weights = tf.concat([
+                tf.get_variable("pad_embed", [1, char_embed_dim], dtype=DTYPE, initializer=tf.zeros_initializer),
+                tf.get_variable("char_embed", [n_chars-1, char_embed_dim], dtype=DTYPE, initializer=tf.random_uniform_initializer(-1.0, 1.0)
+                 )],
                 axis=0)
             # shape (batch_size, unroll_steps, max_chars, embed_dim)
             self.char_embedding = tf.nn.embedding_lookup(self.embedding_weights,

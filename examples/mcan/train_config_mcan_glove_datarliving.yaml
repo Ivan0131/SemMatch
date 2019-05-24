@@ -6,23 +6,23 @@ data:
 
 model:
   name: 'bilstm'
-  num_classes: 3
-  keep_prob: 1.0
-  hidden_dim: 50
+  num_classes: 2
+  dropout_rate: 0.0
+  hidden_dim: 200
   embedding_mapping:
     name: 'base'
     encoders:
       tokens:
         name: 'embedding'
-        embedding_dim: 300
+        embedding_dim: 200
         trainable: "False"
-        pretrained_file: "../data/glove.840B.300d.txt"
+        pretrained_file: "../data/datarliving_200.txt"
         tmp_dir: "./outputs/mcan_glove_datarliving/embedding"
         namespace: 'tokens'
-        keep_prob: 1.0
+        dropout_rate: 0.0
       labels:
         name: 'one_hot'
-        n_values: 3
+        n_values: 2
         namespace: 'labels'
   optimizer:
     name: 'adam'

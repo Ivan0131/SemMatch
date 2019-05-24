@@ -83,8 +83,8 @@ class Predict(Command):
                     probs = output_vals['output']
                     num_batch = probs.shape[0]
                     #######################
-                    predictions = probs #np.argmax(probs, axis=1)
-                    #predictions = (probs > 0.5).astype(np.int32)
+                    predictions = np.argmax(probs, axis=1)
+                    #predictions = (probs <= 0.5).astype(np.int32)
                     total_num += num_batch
                     logger.info("processing %s/%s" % (num_batch, total_num))
 
@@ -157,16 +157,16 @@ class Predict(Command):
         cls.parser = parser.add_parser(name=cls.name, description=cls.description, help='evaluate a model')
         cls.parser.add_argument('--config_path', type=str,
                                 help='the config path where store the params.')
-        cls.parser.set_defaults(func=cls.init_train_from_args)
+        cls.parser.set_defaults(func=cls.init_from_args)
         return cls.parser
 
     @classmethod
-    def init_train_from_args(cls, args):
+    def init_from_args(cls, args):
         config_path = args.config_path
-        cls.init_train_from_config_file(config_path)
+        cls.init_from_config_file(config_path)
 
     @classmethod
-    def init_train_from_config_file(cls, config_path):
+    def init_from_config_file(cls, config_path):
         params = Parameters.init_from_file(config_path)
         return cls.init_from_params(params)
 

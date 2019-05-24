@@ -1,0 +1,28 @@
+data:
+  name: "general" # or quora_data_reader
+  data_path: '.'
+  tmp_path: './bert/'
+  test_filename: 'input.jsonl'
+  batch_size: 8
+  field_mapping:
+    premise: 'question'
+    hypothesis: 'answer'
+  vocab_init_files:
+    tokens: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+
+embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'bert'
+        config_file: '../data/uncased_L-12_H-768_A-12/bert_config.json'
+        vocab_file: '../data/uncased_L-12_H-768_A-12/vocab.txt'
+        ckpt_to_initialize_from: '../data/uncased_L-12_H-768_A-12/bert_model.ckpt'
+        namespace: 'tokens'
+
+output_file: 'output.txt'

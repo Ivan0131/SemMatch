@@ -65,7 +65,10 @@ class SingleIdTokenIndexer(TokenIndexer):
 
     def pad_token_sequence(self, tokens, max_length):
         if len(tokens) > max_length:
-            tokens = tokens[:max_length]
+            if len(self._end_tokens):
+                tokens = tokens[:max_length-len(self._end_tokens)] + tokens[-len(self._end_tokens):]
+            else:
+                tokens = tokens[:max_length]
             return tokens
         padding_token = self.get_padding_values()
         while len(tokens) < max_length:

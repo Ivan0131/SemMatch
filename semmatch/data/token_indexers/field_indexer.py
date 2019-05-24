@@ -16,6 +16,9 @@ class FieldIndexer(TokenIndexer):
             self._namespace = namespace
         self._field_name = field_name
 
+    def get_field_name(self):
+        return self._field_name
+
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
         tag = getattr(token, self._field_name, None)
         if tag is None:

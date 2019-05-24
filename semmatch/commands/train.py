@@ -79,8 +79,8 @@ class Train(Command):
         # if not os.path.exists(best_checkpoint_path+".index"):
         #     best_checkpoint_path = None
         # print(best_checkpoint_path)
-        if self._test_input_fn:
-            self._estimator.evaluate(self._test_input_fn, steps=hparams.test_steps, name=DataSplit.TEST)
+        # if self._test_input_fn:
+        #     self._estimator.evaluate(self._test_input_fn, steps=hparams.test_steps, name=DataSplit.TEST)
 
     @classmethod
     def init_from_params(cls, params):
@@ -105,16 +105,16 @@ class Train(Command):
         cls.parser = parser.add_parser(name=cls.name, description=cls.description, help='train a model')
         cls.parser.add_argument('--config_path', type=str,
                                 help='the config path where store the params.')
-        cls.parser.set_defaults(func=cls.init_train_from_args)
+        cls.parser.set_defaults(func=cls.init_from_args)
         return cls.parser
 
     @classmethod
-    def init_train_from_args(cls, args):
+    def init_from_args(cls, args):
         config_path = args.config_path
-        cls.init_train_from_config_file(config_path)
+        cls.init_from_config_file(config_path)
 
     @classmethod
-    def init_train_from_config_file(cls, config_path):
+    def init_from_config_file(cls, config_path):
         params = Parameters.init_from_file(config_path)
         return cls.init_from_params(params)
 

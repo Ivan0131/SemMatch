@@ -20,7 +20,9 @@ class DatarLivingDataReader(data_reader.DataReader):
     _datarliving_test_dev_url = 'http://alt.qcri.org/semeval2016/task3/data/uploads/semeval2016_task3_test_input.zip'
 
     def __init__(self, data_name: str = "datarliving", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
+                 vocab_init_files: Dict[str, str] = None,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
+                 concat_sequence: bool = False,
                  train_filename=["v3.2/train/SemEval2016-Task3-CQA-QL-train-part1-subtaskA.xml", "v3.2/train/SemEval2016-Task3-CQA-QL-train-part2-subtaskA.xml"],
                  valid_filename="v3.2/dev/SemEval2016-Task3-CQA-QL-dev-subtaskA.xml",
                  test_filename="SemEval2016_task3_test_input/English/SemEval2016-Task3-CQA-QL-test-subtaskA-input.xml",
@@ -28,6 +30,7 @@ class DatarLivingDataReader(data_reader.DataReader):
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(data_name=data_name, data_path=data_path, tmp_path=tmp_path, batch_size=batch_size,
                          emb_pretrained_files=emb_pretrained_files,
+                         vocab_init_files=vocab_init_files, concat_sequence=concat_sequence,
                          only_include_pretrained_words=only_include_pretrained_words,
                          train_filename=train_filename,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)
@@ -58,6 +61,8 @@ class DatarLivingDataReader(data_reader.DataReader):
                     c_rel = comment['RELC_RELEVANCE2RELQ'].lower()
                     c_test = comment['RelCText']
                     if c_rel != "?":
+                        if c_rel != 'good':
+                            c_rel = 'bad'
                         example = {
                             "index": c_id,
                             "premise": q_text,

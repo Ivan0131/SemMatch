@@ -21,17 +21,16 @@ model:
   name: 'diin'
   num_classes: 3
   hidden_dim: 300
-  keep_prob: 0.5
   embedding_mapping:
     name: 'base'
     encoders:
       tokens:
         name: 'embedding'
         embedding_dim: 300
-        trainable: "False"
+        trainable: "True"
         padding_zero: "True"
         pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/esim_diin_glove_mnli/embedding"
+        tmp_dir: "./outputs/esim_diin_glove_mnli_2/embedding"
         namespace: 'tokens'
       chars:
         name: 'embedding'
@@ -53,11 +52,11 @@ model:
     learning_rate: 0.5
 
 run_config:
-  model_dir: './outputs/esim_diin_glove_mnli/'
+  model_dir: './outputs/esim_diin_glove_mnli_2/'
 hparams:
   eval_steps: 150
-  early_stopping_max_steps_without_decrease: 1000000
-  early_stopping_min_steps: 100000
+  early_stopping_max_steps_without_decrease: 10000000
+  early_stopping_min_steps: 1000000
 
 
 
