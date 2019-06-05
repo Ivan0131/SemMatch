@@ -50,16 +50,11 @@ class DRr_Net(Model):
 
             prem_seq_lengths, prem_mask = nn.length(premise_tokens_ids)
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
-            if features.get('premise/elmo_characters', None) is not None:
-                prem_mask = prem_mask[:, 1:-1]
+            if features.get('premise/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = nn.remove_bos_eos(prem_mask, prem_seq_lengths)
                 prem_seq_lengths -= 2
-            if features.get('hypothesis/elmo_characters', None) is not None:
-                hyp_mask = hyp_mask[:, 1:-1]
-                hyp_seq_lengths -= 2
-            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
-                prem_mask = prem_mask[:, 1:-1]
-                prem_seq_lengths -= 2
-                hyp_mask = hyp_mask[:, 1:-1]
+            if features.get('hypothesis/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                hyp_mask = nn.remove_bos_eos(hyp_mask, hyp_seq_lengths)
                 hyp_seq_lengths -= 2
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
@@ -221,18 +216,7 @@ class DRr_Net(Model):
             # Dropout applied to classifier
             fuse_drop = tf.layers.dropout(fuse_mlp, self._dropout_rate, training=is_training)
             #Get prediction
-            fuse_logits = tf.layers.dense(fuse_drop, self._num_classes, activation=None,
-                                          kernel_initializer=self._initializer, name='fuse_logits')
-
-            #fuse_logits = alpha_h*p_h+alpha_v*p_v
-
-            predictions = tf.argmax(fuse_logits, -1)
-            output_dict = {'logits': fuse_logits, 'predictions': predictions}
-
-            probs = tf.nn.softmax(fuse_logits, -1)
-            output_score = tf.estimator.export.PredictOutput(probs)
-            export_outputs = {"output_score": output_score}
-            output_dict['export_outputs'] = export_outputs
+            output_dict = self._make_output(fuse_drop, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -243,13 +227,13 @@ class DRr_Net(Model):
 
                 h_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=h_logits))
                 v_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=v_logits))
-                fuse_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=fuse_logits))
+                fuse_loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
 
                 output_dict['loss'] = v_loss + h_loss + fuse_loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,
                 #                          premise_ave, hypothesis_ave, diff, mul, h, h_mlp, logits]

@@ -5,15 +5,13 @@ from semmatch.utils.exception import ConfigureError
 from semmatch.modules.embeddings import EmbeddingMapping
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch import nn
-from tensorflow.python.ops.rnn_cell import LayerRNNCell, LSTMStateTuple
-from tensorflow.python.keras.utils import tf_utils
+from tensorflow.contrib.rnn import LayerRNNCell
+from tensorflow.python.ops.rnn_cell import LSTMStateTuple
 from semmatch.utils.logger import logger
 from tensorflow.python.eager import context
 from tensorflow.python.layers import base as base_layer
-from tensorflow.python.keras import initializers
 from tensorflow.python.keras import activations
 from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import partitioned_variables
 from semmatch.modules.embeddings.encoders import Bert
 from tensorflow.python.ops import init_ops
 from tensorflow.python.framework import constant_op
@@ -54,16 +52,11 @@ class MatchLSTM(Model):
 
             prem_seq_lengths, prem_mask = nn.length(premise_tokens_ids)
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
-            if features.get('premise/elmo_characters', None) is not None:
-                prem_mask = prem_mask[:, 1:-1]
+            if features.get('premise/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = nn.remove_bos_eos(prem_mask, prem_seq_lengths)
                 prem_seq_lengths -= 2
-            if features.get('hypothesis/elmo_characters', None) is not None:
-                hyp_mask = hyp_mask[:, 1:-1]
-                hyp_seq_lengths -= 2
-            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
-                prem_mask = prem_mask[:, 1:-1]
-                prem_seq_lengths -= 2
-                hyp_mask = hyp_mask[:, 1:-1]
+            if features.get('hypothesis/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                hyp_mask = nn.remove_bos_eos(hyp_mask, hyp_seq_lengths)
                 hyp_seq_lengths -= 2
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
@@ -84,16 +77,7 @@ class MatchLSTM(Model):
         k_m, _ = tf.nn.dynamic_rnn(lstm_m, h_t, hyp_seq_lengths, dtype=tf.float32)
 
         k_valid = select(k_m, hyp_seq_lengths)
-        logits = tf.layers.Dense(self._num_classes)(k_valid)
-
-        predictions = tf.argmax(logits, -1)
-
-        output_dict = {'logits': logits, 'predictions': predictions}
-
-        probs = tf.nn.softmax(logits, -1)
-        output_score = tf.estimator.export.PredictOutput(probs)
-        export_outputs = {"output_score": output_score}
-        output_dict['export_outputs'] = export_outputs
+        output_dict = self._make_output(k_valid, params)
 
         if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
             if 'label/labels' not in features:
@@ -102,12 +86,12 @@ class MatchLSTM(Model):
             labels_embedding = features_embedding['label/labels']
             labels = features['label/labels']
 
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+            loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
             output_dict['loss'] = loss
             metrics = dict()
-            metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-            metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-            metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
+            metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+            metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+            metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
             # metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
             output_dict['metrics'] = metrics
             # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,
@@ -174,7 +158,6 @@ class MatchLSTMCell(LayerRNNCell):
     def output_size(self):
         return self._num_units
 
-    @tf_utils.shape_type_conversion
     def build(self, inputs_shape):
         if inputs_shape[-1] is None:
             raise ValueError("Expected inputs.shape[-1] to be known, saw shape: %s"

@@ -32,7 +32,7 @@ class DatarLivingDataReader(data_reader.DataReader):
                          emb_pretrained_files=emb_pretrained_files,
                          vocab_init_files=vocab_init_files, concat_sequence=concat_sequence,
                          only_include_pretrained_words=only_include_pretrained_words,
-                         train_filename=train_filename,
+                         train_filename=train_filename, num_retrieval=10,
                          valid_filename=valid_filename, test_filename=test_filename, max_length=max_length)
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens')}
@@ -56,6 +56,7 @@ class DatarLivingDataReader(data_reader.DataReader):
                 q_subject = thread['RelQuestion']['RelQSubject']
                 q_text = thread['RelQuestion']['RelQBody']
                 comments = thread['RelComments']
+                assert len(comments) == 10
                 for comment in comments:
                     c_id = comment["RELC_ID"]
                     c_rel = comment['RELC_RELEVANCE2RELQ'].lower()
@@ -103,7 +104,6 @@ class DatarLivingDataReader(data_reader.DataReader):
                     "RelComments": relcomments})
             return threads
 
-
     # def parse(self, xmlfilename):
     #     # with open(xmlfilename, 'r', encoding='utf-8') as xmlfile:
     #     #     xml_str = xmlfile.read()
@@ -130,7 +130,6 @@ class DatarLivingDataReader(data_reader.DataReader):
     #             "RelQuestion": relquestion,
     #             "RelComments": relcomments})
     #     return threads
-
     def _process(self, example):
         fields: Dict[str, Field] = {}
         tokenized_premise = self._tokenizer.tokenize(example['premise'])
@@ -139,7 +138,10 @@ class DatarLivingDataReader(data_reader.DataReader):
         fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)
         fields["hypothesis"] = TextField(tokenized_hypothesis, self._token_indexers, max_length=self._max_length)
         if 'label' in example:
-            fields['label'] = LabelField(example['label'])
+            if example['label'] == 'good':
+                fields['label'] = LabelField(1)
+            else:
+                fields['label'] = LabelField(0)
         return Instance(fields)
 
     def _maybe_download_corpora(self, tmp_dir):

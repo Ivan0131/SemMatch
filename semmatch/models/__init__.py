@@ -10,3 +10,6 @@ from semmatch.models.match_lstm import MatchLSTM
 from semmatch.models.drr_net import DRr_Net
 from semmatch.models.bert_classifier import BertClassifier
 from semmatch.models.mvlstm import MVLSTM
+from semmatch.models.drmm import DRMM
+from semmatch.models.duet import Duet
+from semmatch.models.bert_classifier_test import BertClassifierTest

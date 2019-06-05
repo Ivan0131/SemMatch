@@ -29,3 +29,31 @@ def length(sequence):
     length = tf.cast(tf.reduce_sum(populated, axis=1), tf.int32)
     mask = tf.cast(populated, tf.float32)
     return length, mask
+
+
+def remove_bos_eos(layer, sequence_lengths):
+    if layer.get_shape().ndims == 2:
+        layer_wo_bos_eos = layer[:, 1:]
+    elif layer.get_shape().ndims == 3:
+        layer_wo_bos_eos = layer[:, 1:, :]
+    else:
+        raise Exception("The input of remove_bos_eos should with dim of 2 or 3.")
+    layer_wo_bos_eos = tf.reverse_sequence(
+        layer_wo_bos_eos,
+        sequence_lengths - 1,
+        seq_axis=1,
+        batch_axis=0,
+    )
+    if layer.get_shape().ndims == 2:
+        layer_wo_bos_eos = layer_wo_bos_eos[:, 1:]
+    elif layer.get_shape().ndims == 3:
+        layer_wo_bos_eos = layer_wo_bos_eos[:, 1:, :]
+    else:
+        raise Exception("The input of remove_bos_eos should with dim of 2 or 3.")
+    layer_wo_bos_eos = tf.reverse_sequence(
+        layer_wo_bos_eos,
+        sequence_lengths - 2,
+        seq_axis=1,
+        batch_axis=0,
+    )
+    return layer_wo_bos_eos

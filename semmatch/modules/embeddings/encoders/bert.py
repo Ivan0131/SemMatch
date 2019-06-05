@@ -75,7 +75,7 @@ class Bert(Encoder):
                     embedding_output = model.get_sequence_output()
 
                     if self._remove_bos_eos:
-                        embedding_output = self.remove_bos_eos(embedding_output, input_length)
+                        embedding_output = nn.remove_bos_eos(embedding_output, input_length)
 
                     dropout_rate = params.get('dropout_rate')
                     if dropout_rate is None:
@@ -116,23 +116,6 @@ class Bert(Encoder):
                 vars_to_warm_start="embedding/%s/*" % self._vocab_namespace,
                 var_name_to_prev_var_name=embedding_vars_mapping)
         return ws
-
-    def remove_bos_eos(self, layer, sequence_lengths):
-        layer_wo_bos_eos = layer[:, 1:, :]
-        layer_wo_bos_eos = tf.reverse_sequence(
-            layer_wo_bos_eos,
-            sequence_lengths - 1,
-            seq_axis=1,
-            batch_axis=0,
-        )
-        layer_wo_bos_eos = layer_wo_bos_eos[:, 1:, :]
-        layer_wo_bos_eos = tf.reverse_sequence(
-            layer_wo_bos_eos,
-            sequence_lengths - 2,
-            seq_axis=1,
-            batch_axis=0,
-        )
-        return layer_wo_bos_eos
 
     @classmethod
     def init_from_params(cls, params, vocab):

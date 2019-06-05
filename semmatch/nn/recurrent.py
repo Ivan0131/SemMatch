@@ -14,16 +14,16 @@ def _base_bi_rnn(fw_cell, bw_cell, sequence, sequence_length=None, initial_state
 def bi_lstm(seq, hidden_units, seq_len=None, initial_state=(None, None),
             initializer=tf.contrib.layers.xavier_initializer(), name='bi_lstm'):
     with tf.variable_scope(name):
-        fw_cell = tf.keras.layers.LSTMCell(hidden_units, kernel_initializer=initializer)
-        bw_cell = tf.keras.layers.LSTMCell(hidden_units, kernel_initializer=initializer)
+        fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_units, initializer=initializer)
+        bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_units, initializer=initializer)
         return _base_bi_rnn(fw_cell, bw_cell, seq, seq_len, initial_state)
 
 
 def bi_gru(seq, hidden_units, seq_len=None, initial_state=(None, None),
            initializer=tf.contrib.layers.xavier_initializer(), name="bi_grm"):
     with tf.variable_scope(name):
-        fw_cell = tf.keras.layers.GRUCell(hidden_units, kernel_initializer=initializer)
-        bw_cell = tf.keras.layers.GRUCell(hidden_units, kernel_initializer=initializer)
+        fw_cell = tf.nn.rnn_cell.GRUCell(hidden_units, kernel_initializer=initializer)
+        bw_cell = tf.nn.rnn_cell.GRUCell(hidden_units, kernel_initializer=initializer)
         return _base_bi_rnn(fw_cell, bw_cell, seq, seq_len, initial_state)
 
 
@@ -36,14 +36,14 @@ def _base_rnn(fw_cell, sequence, sequence_length=None, initial_state=None):
 def lstm(seq, hidden_units, seq_len=None, initial_state=None,
          initializer=tf.contrib.layers.xavier_initializer(), name="lstm"):
     with tf.variable_scope(name):
-        fw_cell = tf.keras.layers.LSTMCell(hidden_units, kernel_initializer=initializer)
+        fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_units, initializer=initializer)
         return _base_rnn(fw_cell, seq, seq_len, initial_state)
 
 
 def gru(seq, hidden_units, seq_len=None, initial_state=None,
         initializer=tf.contrib.layers.xavier_initializer(), name="gru"):
     with tf.variable_scope(name):
-        fw_cell = tf.keras.layers.GRUCell(hidden_units, kernel_initializer=initializer)
+        fw_cell = tf.nn.rnn_cell.GRUCell(hidden_units, kernel_initializer=initializer)
         return _base_rnn(fw_cell, seq, seq_len, initial_state)
 
 

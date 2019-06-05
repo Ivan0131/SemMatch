@@ -10,6 +10,7 @@ import numpy as np
 from tensorflow.python.estimator import model_fn
 from semmatch.utils.saved_model import get_meta_graph_def_for_mode, get_signature_def_for_mode, \
     check_same_dtype_and_shape, generate_input_map
+import simplejson as json
 from sklearn import metrics
 
 
@@ -48,17 +49,27 @@ class Evaluate(Command):
         output_map = dict(zip(output_tensor_names, output_tensors))
         outputs = {key: output_map[value.name]
                    for (key, value) in signature_def.outputs.items()}
-
         # #############
         # prediction = list(outputs.values())[0]
         # example_name = input_names[0]
-
+        ##############
+        graph = tf.get_default_graph()
+        outputs['query_embedding'] = graph.get_tensor_by_name("esim/concat:0")
+        outputs['title_embedding'] = graph.get_tensor_by_name("esim/concat_1:0")
+        outputs['query_lstm_1'] = graph.get_tensor_by_name("esim/concat_2:0")
+        outputs['title_lstm_1'] = graph.get_tensor_by_name("esim/concat_3:0")
+        outputs['query_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul:0')
+        outputs['title_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul_1:0')
+        outputs['query_lstm_2'] = graph.get_tensor_by_name("esim/concat_6:0")
+        outputs['title_lstm_2'] = graph.get_tensor_by_name("esim/concat_7:0")
+        ###############
         #predict_fn = tf.contrib.predictor.from_saved_model(export_dir)
 
         #####xlsx wirte######
         wb = Workbook(write_only=True)
         ws = wb.create_sheet('examples')
         ws.append(['question', 'answer', 'true_label', 'predict', 'score'])
+
 
         y_true = []
         y_pred = []
@@ -76,8 +87,14 @@ class Evaluate(Command):
                     output_vals = sess.run(outputs)
 
                     data_batch = output_vals['inputs']
-                    premise_tokens_val, hypothesis_tokens_val, true_label_val = \
-                        data_batch['premise/tokens'], data_batch['hypothesis/tokens'], data_batch['label/labels']
+                    if 'premise/tokens' in data_batch.keys() and 'hypothesis/tokens' in data_batch.keys():
+                        premise_tokens_val, hypothesis_tokens_val, true_label_val = \
+                            data_batch['premise/tokens'], data_batch['hypothesis/tokens'], data_batch['label/labels']
+                    else:
+                        true_label_val = data_batch['label/labels']
+                        premise_tokens_val = [[] for i in range(len(true_label_val))]
+                        hypothesis_tokens_val = [[] for i in range(len(true_label_val))]
+                    #probs = output_vals['output_score']
                     probs = output_vals['output']
                     num_batch = probs.shape[0]
                     total_num += num_batch
@@ -85,7 +102,7 @@ class Evaluate(Command):
                     #######################
                     #print(probs)
                     predictions = np.argmax(probs, axis=1)
-                    #predictions = (probs < 0.5).astype(np.int32)
+                    #predictions = (probs > 0.5).astype(np.int32)
                     #print(predictions)
                     y_true.append(true_label_val)
                     y_pred.append(predictions)
@@ -106,7 +123,12 @@ class Evaluate(Command):
                         true_label = true_label_val[i]
                         predict = predictions[i]
                         prob = probs[i]
-                        ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob)])
+                        #ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob)])
+                        ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob),
+                                   json.dumps(output_vals['query_embedding'][i].tolist()), json.dumps(output_vals['title_embedding'][i].tolist()),
+                                   json.dumps(output_vals['query_lstm_1'][i].tolist()), json.dumps(output_vals['title_lstm_1'][i].tolist()),
+                                   json.dumps(output_vals['query_attention'][i].tolist()), json.dumps(output_vals['title_attention'][i].tolist()),
+                                   json.dumps(output_vals['query_lstm_2'][i].tolist()), json.dumps(output_vals['title_lstm_2'][i].tolist())])
                     #print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
                 except tf.errors.OutOfRangeError as e:
                     #logger.warning(e)

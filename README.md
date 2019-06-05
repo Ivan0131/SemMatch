@@ -24,6 +24,7 @@ Quora数据集 F1-Score/Accuracy
 |BiMPM | 82.3/86.3 | 62.8/84.0 | 
 |MCAN | 81.7/86.5 | 63.8/85.7 |
 |BERT| 86.3/89.9|  70.3/88.8 |
+|MV-LSTM| 75.1/77.9| 53.2/72.9 |
 
 ## 实现的模型
 
@@ -34,6 +35,7 @@ Quora数据集 F1-Score/Accuracy
 5. match_LSTM: [Learning Natural Language Inference with LSTM](https://www.aclweb.org/anthology/N16-1170)
 6. MCAN [Multi-Cast Attention Networks for Retrieval-based Question Answering and Response Prediction](https://arxiv.org/abs/1806.00778)
 7. BERT [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
+
 ## INSTALL
 ```
 git clone https://git.sogou-inc.com/hangzhou_research/SemMatch.git
@@ -43,6 +45,7 @@ cd SemMatch
 pip3 install -r requirements.txt
 python3 setup.py install #只支持python3.6+
 ```
+
 ### 测试
 ```
 cd examples

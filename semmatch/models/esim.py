@@ -42,16 +42,11 @@ class ESIM(Model):
             prem_seq_lengths, prem_mask = nn.length(premise_tokens_ids)
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
 
-            if features.get('premise/elmo_characters', None) is not None:
-                prem_mask = prem_mask[:, 1:-1]
+            if features.get('premise/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = nn.remove_bos_eos(prem_mask, prem_seq_lengths)
                 prem_seq_lengths -= 2
-            if features.get('hypothesis/elmo_characters', None) is not None:
-                hyp_mask = hyp_mask[:, 1:-1]
-                hyp_seq_lengths -= 2
-            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
-                prem_mask = prem_mask[:, 1:-1]
-                prem_seq_lengths -= 2
-                hyp_mask = hyp_mask[:, 1:-1]
+            if features.get('hypothesis/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                hyp_mask = nn.remove_bos_eos(hyp_mask, hyp_seq_lengths)
                 hyp_seq_lengths -= 2
 
             prem_mask = tf.expand_dims(prem_mask, -1)
@@ -117,16 +112,7 @@ class ESIM(Model):
             h_drop = tf.layers.dropout(h_mlp, self._dropout_rate, training=is_training)
 
             # Get prediction
-            logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
-
-            predictions = tf.argmax(logits, -1)
-
-            output_dict = {'logits': logits, 'predictions': predictions}
-
-            probs = tf.nn.softmax(logits, -1)
-            output_score = tf.estimator.export.PredictOutput(probs)
-            export_outputs = {"output_score": output_score}
-            output_dict['export_outputs'] = export_outputs
+            output_dict = self._make_output(h_drop, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -135,12 +121,12 @@ class ESIM(Model):
                 labels_embedding = features_embedding['label/labels']
                 labels = features['label/labels']
 
-                loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+                loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
                 output_dict['loss'] = loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
                # metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
 
                 output_dict['metrics'] = metrics

@@ -17,7 +17,7 @@ import gzip
 class Embedding(Encoder):
     def __init__(self, embedding_dim: int, num_embeddings: int = None, projection_dim: int = None,
                  vocab: Vocabulary = None, vocab_namespace: str = None, dropout_rate: float = 0.0, padding_zero: bool = False,
-                 trainable: bool = True, pretrained_file: str = None, tmp_dir=None, encoder_name="embedding"):
+                 trainable: bool = True, pretrained_file: str = None, tmp_dir: str = None, encoder_name: str ="embedding"):
         super().__init__(encoder_name=encoder_name, vocab_namespace=vocab_namespace)
         if num_embeddings is None:
             num_embeddings = vocab.get_vocab_size(vocab_namespace)
@@ -137,7 +137,7 @@ def _read_pretrained_embeddings_text(pretrained_file, embedding_dim, vocab, voca
     logger.info("Reading pretrained embeddings from: %s" % pretrained_file)
     with open(pretrained_file, 'r', encoding='utf-8') as embeddings_file:
         for line in tqdm.tqdm(embeddings_file):
-            token = line.split(' ', 1)[0]
+            token = line.split(" ", 1)[0]
             if token in vocab_tokens:
                 fields = line.rstrip().split(' ')
                 if len(fields) - 1 != embedding_dim:

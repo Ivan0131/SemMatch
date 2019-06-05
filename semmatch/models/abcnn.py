@@ -218,18 +218,7 @@ class ABCNN(Model):
                 output_features = tf.concat([tf.stack(sims, axis=1)], axis=1,
                                                  name="output_features")
 
-                logits = tf.contrib.layers.fully_connected(
-                    inputs=output_features,
-                    num_outputs=self._num_classes,
-                    activation_fn=None,
-                    weights_initializer=tf.contrib.layers.xavier_initializer(),
-                   # weights_regularizer=tf.contrib.layers.l2_regularizer(scale=l2_reg),
-                    biases_initializer=tf.constant_initializer(1e-04),
-                    scope="FC"
-                )
-
-            predictions = tf.argmax(logits, -1)
-            output_dict = {'logits': logits, 'predictions': predictions}
+                output_dict = self._make_output(output_features, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -238,12 +227,12 @@ class ABCNN(Model):
                 labels_embedding = features_embedding['label/labels']
                 labels = features['label/labels']
 
-                loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+                loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
                 output_dict['loss'] = loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
+                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=output_dict['predictions'])
                 output_dict['metrics'] = metrics
             return output_dict

@@ -10,8 +10,8 @@ from semmatch import nn
 
 #BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding
 #https://arxiv.org/abs/1810.04805
-@register.register_subclass('model', 'bert_classifier')
-class BertClassifier(Model):
+@register.register_subclass('model', 'bert_classifier_test')
+class BertClassifierTest(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
                  dropout_rate: float = 0.1, initializer_range: float = 0.02, model_name: str = 'bert_classifier'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
@@ -36,15 +36,21 @@ class BertClassifier(Model):
                                      "or elmo_characters.")
 
             premise_tokens = features_embedding.get('premise/tokens', None)
+            hypothesis_tokens = features_embedding.get('hypothesis/tokens', None)
 
             hidden_size = premise_tokens.shape[-1].value
 
             with tf.variable_scope("pooler"):
                 # We "pool" the model by simply taking the hidden state corresponding
                 # to the first token. We assume that this has been pre-trained
-                first_token_tensor = tf.squeeze(premise_tokens[:, 0:1, :], axis=1)
+                premise_first_token_tensor = tf.squeeze(premise_tokens[:, 0:1, :], axis=1)
+                hypothesis_first_token_tensor = tf.squeeze(hypothesis_tokens[:, 0:1, :], axis=1)
+
+                dense_input = tf.concat([premise_first_token_tensor, hypothesis_first_token_tensor,
+                                         premise_first_token_tensor-hypothesis_first_token_tensor,
+                                         premise_first_token_tensor*hypothesis_first_token_tensor], axis=-1)
                 output_layer = tf.layers.dense(
-                    first_token_tensor,
+                    dense_input,
                     hidden_size,
                     activation=tf.tanh,
                     kernel_initializer=create_initializer(self._initializer_range))

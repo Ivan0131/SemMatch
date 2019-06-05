@@ -25,7 +25,9 @@ def load_from_txt(filename):
     with open(filename, 'r', encoding='utf-8') as txt_file:
         lines = txt_file.readlines()
         lines = [line.strip('\n') for line in lines]
-        items = [line.split()[0] if line.strip() != "" else line for line in lines]
+        if len(lines[0].split()) == 2:
+            lines = lines[1:]
+        items = [line.split(" ", 1)[0] if line.strip() != "" else line for line in lines]
         return items
 
 
@@ -82,6 +84,19 @@ class Vocabulary(object):
         if vocab_init_files is not None:
             for namespace, vocab_path in vocab_init_files.items():
                 vocab_namespace = load_from_txt(vocab_path)
+                if not namespace_match(DEFAULT_NON_PADDED_NAMESPACES, namespace):
+                    if namespace_match(DEFAULT_NON_UNK_NAMESPACES, namespace):
+                        if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
+                            vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
+                        vocab_namespace = vocab_namespace[:1] + list(set(vocab_namespace[1:]))
+                    else:
+                        if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
+                            vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
+                        if vocab_namespace[1] != DEFAULT_OOV_TOKEN:
+                            vocab_namespace.insert(1, DEFAULT_OOV_TOKEN)
+                        vocab_namespace = vocab_namespace[:2] + list(set(vocab_namespace[2:]))
+                else:
+                    vocab_namespace = list(set(vocab_namespace))
                 self._index_to_token[namespace] = dict((index, token) for index, token in enumerate(vocab_namespace))
                 self._token_to_index[namespace] = dict((token, index) for index, token in enumerate(vocab_namespace))
         self._namespace_to_path = dict()
@@ -127,7 +142,7 @@ class Vocabulary(object):
         if self.valid():
             return True
         else:
-            return False
+            raise ConfigureError("Vocabulary valid error")
 
     def valid(self):
         for namespace, mapping in self._index_to_token.items():
@@ -188,8 +203,8 @@ class Vocabulary(object):
                 pretrained_path = pretrained_files[namespace]
                 with open(pretrained_path, 'r', encoding='utf-8') as embeddings_file:
                     for line in tqdm.tqdm(embeddings_file):
-                        token = line.rstrip().split(' ', 1)[0]
-                        fields = line.rstrip().split(' ')
+                        token = line.rstrip().split(" ", 1)[0]
+                        fields = line.rstrip().split(" ")
                         if len(fields) != 2:
                             pretrained_list.append(token)
                 pretrained_set = set(pretrained_list)

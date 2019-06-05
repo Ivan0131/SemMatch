@@ -38,7 +38,8 @@ class DataReader(InitFromParams):
     def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32,
                  train_filename: str = None, valid_filename: str = None, test_filename: str = None,
                  predict_filename: str = None, max_length: int = None,
-                 vocab_init_files:Dict[str, str] = None, concat_sequence = False,
+                 vocab_init_files: Dict[str, str] = None, concat_sequence: bool = False,
+                 num_retrieval: int = None,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
@@ -60,9 +61,13 @@ class DataReader(InitFromParams):
         self._only_include_pretrained_words = only_include_pretrained_words
         self._vocab_init_files = vocab_init_files
         self._concat_sequence = concat_sequence
+        self._num_retrieval = num_retrieval
 
     def get_data_name(self):
         return self._data_name
+
+    def get_num_retrieval(self):
+        return self._num_retrieval
 
     def get_filename_by_mode(self, mode):
         filename = self._mode_2_filename.get(mode, None)
@@ -141,7 +146,7 @@ class DataReader(InitFromParams):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         num_threads = cpu_count() if is_training else 1
         batch_size = self._batch_size
-        dataset = self.dataset(features, mode, num_threads=num_threads)
+        dataset = self.dataset(features, mode, params, num_threads=num_threads)
         if force_repeat or is_training:
             dataset = dataset.repeat()
             print("dataset repeat")
@@ -152,7 +157,7 @@ class DataReader(InitFromParams):
         dataset = dataset.prefetch(2)
         return dataset
 
-    def dataset(self, features, mode, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
+    def dataset(self, features, mode, params, num_threads=None, output_buffer_size=None, shuffle_files=None, shuffle_buffer_size=1024):
         def _parse_function(example_proto, features):
             context_parsed, sequence_parsed = tf.parse_single_sequence_example(
                 example_proto, context_features=features[1],
@@ -174,10 +179,13 @@ class DataReader(InitFromParams):
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
         shuffle_files = shuffle_files or shuffle_files is None and is_training
+        if params.get('task', 'classification') == 'rank':
+            shuffle_files = False
         filenames = self._get_output_file_paths(mode)
         if is_training:
             dataset = tf.data.Dataset.from_tensor_slices(tf.constant(filenames))
-            dataset.shuffle(buffer_size=len(filenames))
+            if shuffle_files:
+                dataset.shuffle(buffer_size=len(filenames))
             #dataset.repeat()
             cycle_length = min(num_threads, len(filenames))
             # dataset = dataset.apply(

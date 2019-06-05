@@ -8,19 +8,31 @@ from semmatch.modules.embeddings.encoders import Bert
 from semmatch import nn
 
 
-#A Decomposable Attention Model for Natural Language Inference (EMNLP 2016)
-#https://arxiv.org/abs/1606.01933
-@register.register_subclass('model', 'decomp_attn')
-class DecomposableAttention(Model):
-    #Model diverged with loss = NaN.
+#A Deep Relevance Matching Model for Ad-hoc Retrieval
+#https://arxiv.org/abs/1711.08611
+@register.register_subclass('model', 'drmm')
+class DRMM(Model):
+    """
+    DRMM Model
+    Arguments:
+        top_k: Size of top-k pooling layer.
+        mlp_num_layers: The number of mlp layers.
+        mlp_num_units: The hidden size of mlp.
+        mlp_num_fan_out: The output size of mlp.
+        mlp_activation_func: The activation function of mlp.
+    """
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 200, dropout_rate: float = 0.2,
-                 model_name: str = 'bilstm'):
+                 top_k: int = 10, mlp_num_layers: int = 1, mlp_num_units: int = 5, mlp_num_fan_out: int = 1,
+                 mlp_activation_func: str = 'tanh',
+                 model_name: str = 'drmm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
-        self._hidden_dim = hidden_dim
-        self._dropout_rate = dropout_rate
+        self._top_k = top_k
+        self._mlp_num_layers = mlp_num_layers
+        self._mlp_num_units = mlp_num_units
+        self._mlp_num_fan_out = mlp_num_fan_out
+        self._mlp_activation_func = mlp_activation_func
 
     def forward(self, features, labels, mode, params):
         features_embedding = self._embedding_mapping.forward(features, labels, mode, params)
@@ -49,8 +61,9 @@ class DecomposableAttention(Model):
             if features.get('hypothesis/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
                 hyp_mask = nn.remove_bos_eos(hyp_mask, hyp_seq_lengths)
                 hyp_seq_lengths -= 2
-            # prem_mask = tf.expand_dims(prem_mask, -1)
-            # hyp_mask = tf.expand_dims(hyp_mask, -1)
+
+            prem_mask = tf.expand_dims(prem_mask, -1)
+            hyp_mask = tf.expand_dims(hyp_mask, -1)
 
             premise_tokens = features_embedding.get('premise/tokens', None)
             if premise_tokens is None:
@@ -59,37 +72,29 @@ class DecomposableAttention(Model):
             if hypothesis_tokens is None:
                 hypothesis_tokens = features_embedding.get('hypothesis/elmo_characters', None)
 
-            with tf.variable_scope("Attend"):
-                F_a_bar = self._feedForwardBlock(premise_tokens, self._hidden_dim, 'F', is_training=is_training)
-                F_b_bar = self._feedForwardBlock(hypothesis_tokens, self._hidden_dim, 'F', isReuse=True, is_training=is_training)
+            dense_output = tf.layers.dense(premise_tokens, 1, use_bias=False)
+            dense_output += (1-prem_mask) * tf.float32.min
+            attention_probs = tf.nn.softmax(dense_output, axis=1)
 
-                # e_i,j = F'(a_hat, b_hat) = F(a_hat).T * F(b_hat) (1)
-                #alignment_attention = Attention(self.hidden_size, self.hidden_size)
-                #alpha = alignment_attention(F_b_bar, F_a_bar, keys_mask=self.query_mask)
-                #beta = alignment_attention(F_a_bar, F_b_bar, keys_mask=self.doc_mask)
-                alpha, beta = nn.bi_uni_attention(F_a_bar, F_b_bar, query_len=prem_seq_lengths, key_len=hyp_seq_lengths)
+            # Matching histogram of top-k
+            # shape = [B, M, N]
+            matching_matrix = tf.matmul(tf.nn.l2_normalize(premise_tokens, axis=2), tf.nn.l2_normalize(hypothesis_tokens, axis=2),
+                                        transpose_b=True)
+            # shape = [B, M, K]
+            matching_topk = tf.nn.top_k(matching_matrix, k=self._top_k, sorted=True)[0]
 
-            with tf.variable_scope("Compare"):
-                a_beta = tf.concat([premise_tokens, alpha], axis=2)
-                b_alpha = tf.concat([hypothesis_tokens, beta], axis=2)
+            # Feedforward matching topk
+            # shape = [B, M, 1]
+            dense_output = matching_topk
+            for i in range(self._mlp_num_layers):
+                dense_output = tf.layers.Dense(self._mlp_num_units, activation=self._mlp_activation_func, use_bias=True)(dense_output)
+            dense_output = tf.layers.Dense(self._mlp_num_fan_out, activation=self._mlp_activation_func, use_bias=True)(dense_output)
 
-                # v_1,i = G([a_bar_i, beta_i])
-                # v_2,j = G([b_bar_j, alpha_j]) (3)
-                v_1 = self._feedForwardBlock(a_beta, self._hidden_dim, 'G', is_training=is_training)
-                v_2 = self._feedForwardBlock(b_alpha, self._hidden_dim, 'G', isReuse=True, is_training=is_training)
-
-            with tf.variable_scope("Aggregate"):
-                # v1 = \sum_{i=1}^l_a v_{1,i}
-                # v2 = \sum_{j=1}^l_b v_{2,j} (4)
-                v1_sum = tf.reduce_sum(v_1, axis=1)
-                v2_sum = tf.reduce_sum(v_2, axis=1)
-
-                # y_hat = H([v1, v2]) (5)
-                v = tf.concat([v1_sum, v2_sum], axis=1)
-
-                ff_outputs = self._feedForwardBlock(v, self._hidden_dim, 'H', is_training=is_training)
-
-                output_dict = self._make_output(ff_outputs, params)
+            # shape = [B, 1, 1]
+            dot_score = tf.matmul(attention_probs, dense_output, transpose_a=True)
+            flatten_score = tf.reshape(dot_score, [-1, 1])
+            # Get prediction
+            output_dict = self._make_output(flatten_score, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -104,28 +109,13 @@ class DecomposableAttention(Model):
                 metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
                 metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
                 metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
-                #metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                # metrics['map'] = tf.metrics.average_precision_at_k(labels=tf.cast(labels, tf.int64), predictions=output_dict['logits'],
+                #                                                    k=2)
+                # metrics['precision_1'] = tf.metrics.precision_at_k(labels=tf.cast(labels, tf.int64), predictions=output_dict['logits'],
+                #                                                    k=1, class_id=1)
+
+                    #tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics
-                # output_dict['debugs'] = [tf.shape(hypothesis_tokens), tf.shape(premise_tokens),
-                #                          tf.shape(alpha), tf.shape(beta)]
+                # output_dict['debugs'] = [hypothesis_tokens, premise_tokens, hypothesis_bi, premise_bi,
+                #                          premise_ave, hypothesis_ave, diff, mul, h, h_mlp, logits]
             return output_dict
-
-    def _feedForwardBlock(self, inputs, num_units, scope, is_training=True, isReuse = False, initializer = None):
-        """
-        :param inputs: tensor with shape (batch_size, seq_length, embedding_size)
-        :param num_units: dimensions of each feed forward layer
-        :param scope: scope name
-        :return: output: tensor with shape (batch_size, num_units)
-        """
-        with tf.variable_scope(scope, reuse=isReuse):
-            if initializer is None:
-                initializer = tf.contrib.layers.xavier_initializer()
-
-            with tf.variable_scope('feed_foward_layer1'):
-                inputs = tf.layers.dropout(inputs, self._dropout_rate, training=is_training)
-                outputs = tf.layers.dense(inputs, num_units, tf.nn.relu, kernel_initializer=initializer)
-            with tf.variable_scope('feed_foward_layer2'):
-                outputs = tf.layers.dropout(outputs, self._dropout_rate, training=is_training)
-                resluts = tf.layers.dense(outputs, num_units, tf.nn.relu, kernel_initializer=initializer)
-                return resluts
-

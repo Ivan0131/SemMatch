@@ -14,13 +14,13 @@ from semmatch import nn
 @register.register_subclass('model', 'mvlstm')
 class MVLSTM(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 hidden_dim: int = 50, dropout_rate: float = 0.5, num_k: int = 10, num_tensor_dim: int = 8,
-                 sim_func: str = "tensor",
+                 hidden_dim: int = 50, dropout_rate: float = 0.5, top_k: int = 10, num_tensor_dim: int = 8,
+                 sim_func: str = "cosine",
                  model_name: str = 'mvlstm'):
         super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
-        self._num_k = num_k
+        self._num_k = top_k
         self._num_tensor_dim = num_tensor_dim
         self._hidden_dim = hidden_dim
         self._dropout_rate = dropout_rate
@@ -50,19 +50,15 @@ class MVLSTM(Model):
 
             prem_seq_lengths, prem_mask = nn.length(premise_tokens_ids)
             hyp_seq_lengths, hyp_mask = nn.length(hypothesis_tokens_ids)
-            if features.get('premise/elmo_characters', None) is not None:
-                prem_mask = prem_mask[:, 1:-1]
+            if features.get('premise/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                prem_mask = nn.remove_bos_eos(prem_mask, prem_seq_lengths)
                 prem_seq_lengths -= 2
-            if features.get('hypothesis/elmo_characters', None) is not None:
-                hyp_mask = hyp_mask[:, 1:-1]
-                hyp_seq_lengths -= 2
-            if isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
-                prem_mask = prem_mask[:, 1:-1]
-                prem_seq_lengths -= 2
-                hyp_mask = hyp_mask[:, 1:-1]
+            if features.get('hypothesis/elmo_characters', None) is not None or isinstance(self._embedding_mapping.get_encoder('tokens'), Bert):
+                hyp_mask = nn.remove_bos_eos(hyp_mask, hyp_seq_lengths)
                 hyp_seq_lengths -= 2
             prem_mask = tf.expand_dims(prem_mask, -1)
             hyp_mask = tf.expand_dims(hyp_mask, -1)
+            prem_hyp_mask = tf.matmul(prem_mask, hyp_mask, transpose_b=True)
 
             premise_tokens = features_embedding.get('premise/tokens', None)
             if premise_tokens is None:
@@ -107,6 +103,7 @@ class MVLSTM(Model):
                 raise ConfigureError("The simility function %s is not supported. "
                                      "The mvlstm only support simility function for [cosine, bilinear, tensor]." % self._sim_func)
 
+            tensor *= prem_hyp_mask
             # 3.1 k-Max Pooling
             matrix_in = tf.reshape(tensor, [-1, max_premise_length * max_hypothesis_length])
             values, indices = tf.nn.top_k(matrix_in, k=self._num_k, sorted=False)
@@ -120,10 +117,7 @@ class MVLSTM(Model):
             # Dropout applied to classifier
             h_drop = tf.layers.dropout(h_mlp_2, self._dropout_rate, training=is_training)
             # Get prediction
-            logits = tf.contrib.layers.fully_connected(h_drop, self._num_classes, activation_fn=None, scope='logits')
-
-            predictions = tf.cast(tf.argmax(logits, -1), tf.int32)
-            output_dict = {'logits': logits, 'predictions': predictions}
+            output_dict = self._make_output(h_drop, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -132,12 +126,12 @@ class MVLSTM(Model):
                 labels_embedding = features_embedding['label/labels']
                 labels = features['label/labels']
 
-                loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+                loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
                 output_dict['loss'] = loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
 
                     #tf.metrics.auc(labels=labels, predictions=predictions)
                 output_dict['metrics'] = metrics

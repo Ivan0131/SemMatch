@@ -9,6 +9,7 @@ from semmatch.models import Model
 from semmatch.config.run_config import RunConfig
 from semmatch.config.hparams import HParams
 from semmatch.utils.logger import logger
+tf_version = list(map(int, tf.__version__.split(".")))
 
 
 @register.register_subclass('command', 'train')
@@ -31,6 +32,9 @@ class Train(Command):
         if self._train_input_fn is None:
             raise ConfigureError("The train dataset is not provided.")
 
+        if data_reader:
+            hparams.add_hparam("num_retrieval", data_reader.get_num_retrieval())
+
         if model is None:
             raise ConfigureError("Please provide model for training.")
         self._model_fn = model.make_estimator_model_fn()
@@ -39,36 +43,39 @@ class Train(Command):
             model_fn=self._model_fn,
             config=run_config, params=hparams, warm_start_from=model.get_warm_start_setting())
 
-        early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
-            self._estimator,
-            metric_name='loss',
-            max_steps_without_decrease=hparams.early_stopping_max_steps_without_decrease,
-            min_steps=hparams.early_stopping_min_steps)
+        train_hooks = []
+        if tf_version[1] >= 10:
+            early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
+                self._estimator,
+                metric_name='loss',
+                max_steps_without_decrease=hparams.early_stopping_max_steps_without_decrease,
+                min_steps=hparams.early_stopping_min_steps)
+            train_hooks.append(early_stopping)
 
         exporters = None
         if self._serving_feature_spec:
             serving_input_receiver_fn = (
                 tf.estimator.export.build_raw_serving_input_receiver_fn(
                     self._serving_feature_spec))
-
-            best_exporter = tf.estimator.BestExporter(
-                name="best_exporter",
-                serving_input_receiver_fn=serving_input_receiver_fn,
-                exports_to_keep=5)
+            exporters = []
+            if tf_version[1] >= 9:
+                best_exporter = tf.estimator.BestExporter(
+                    name="best_exporter",
+                    serving_input_receiver_fn=serving_input_receiver_fn,
+                    exports_to_keep=5)
+                exporters.append(best_exporter)
             latest_export = tf.estimator.LatestExporter(
-                name='latest_export',
+                name='latest_exporter',
                 serving_input_receiver_fn=serving_input_receiver_fn,
                 exports_to_keep=5
             )
-            exporters = [latest_export, best_exporter]
+            exporters.append(latest_export)
 
         self._train_spec = tf.estimator.TrainSpec(input_fn=self._train_input_fn,
-                                                  max_steps=hparams.train_steps, hooks=[early_stopping])
+                                                  max_steps=hparams.train_steps, hooks=train_hooks)
         if self._valid_input_fn:
             self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
                                                      exporters=exporters)
-        #print(self._estimator.signature_def[tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY])
-
         tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
         # print(eval_results)
         # eval_results = [eval_result[0] for eval_result in eval_results]

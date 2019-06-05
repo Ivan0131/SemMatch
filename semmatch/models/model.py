@@ -6,12 +6,14 @@ from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch.modules.embeddings import EmbeddingMapping
+from semmatch.nn.loss import rank_hinge_loss
 from tensorflow.python import debug as tf_debug
 
 
 @register.register("model")
 class Model(InitFromParams):
-    def __init__(self, embedding_mapping: EmbeddingMapping, optimizer: Optimizer=AdamOptimizer(), model_name: str="model"):
+    def __init__(self, embedding_mapping: EmbeddingMapping, optimizer: Optimizer = AdamOptimizer(),
+                 model_name: str = "model"):
         self._model_name = model_name
         self._optimizer = optimizer
         self._embedding_mapping = embedding_mapping
@@ -21,6 +23,39 @@ class Model(InitFromParams):
 
     def forward(self, features, labels, mode, params):
         raise NotImplementedError
+
+    def _make_output(self, inputs, params):
+        task = params.get('task', 'classification')
+        if task == 'classification':
+            logits = tf.contrib.layers.fully_connected(inputs, self._num_classes, activation_fn=None, scope='logits')
+
+            predictions = tf.cast(tf.argmax(logits, -1), tf.int32)
+            output_score = tf.nn.softmax(logits, -1)
+        elif task == 'rank':
+            logits = tf.contrib.layers.fully_connected(inputs, 1, activation_fn=None, scope='logits')
+            predictions = logits
+            output_score = logits
+        else:
+            raise ConfigureError(
+                "Task %s is not support. Only task and classification tasks are supported" % task)
+
+        output_dict = {'logits': logits, 'predictions': predictions}
+        output_score = tf.estimator.export.PredictOutput(output_score)
+        export_outputs = {"output_score": output_score}
+        output_dict['export_outputs'] = export_outputs
+        return output_dict
+
+    def _make_loss(self, logits, labels, params):
+        task = params.get('task', 'classification')
+        if task == 'classification':
+            loss = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits))
+        elif task == 'rank':
+            loss = rank_hinge_loss(labels=labels, logits=logits, params=params)
+        else:
+            raise ConfigureError(
+                "Task %s is not support. Only task and classification tasks are supported" % task)
+        return loss
 
     def make_estimator_model_fn(self):
         def model_fn(features, labels, mode, params):
@@ -32,16 +67,16 @@ class Model(InitFromParams):
 
             if mode == tf.estimator.ModeKeys.TRAIN:
                 if 'loss' not in output_dict:
-                    raise ModelError("Please provide loss in the model outputs for %s dataset."%mode)
+                    raise ModelError("Please provide loss in the model outputs for %s dataset." % mode)
                 train_op, optimizer_hooks = self._optimizer.get_train_op(output_dict['loss'], params)
-                #optimizer_hooks.append(tf_debug.LocalCLIDebugHook())
+                # optimizer_hooks.append(tf_debug.LocalCLIDebugHook())
                 ##########
                 if 'debugs' in output_dict:
-                    tvars = output_dict['debugs'] #tf.trainable_variables()
+                    tvars = output_dict['debugs']  # tf.trainable_variables()
                     print_ops = []
                     for op in tvars:
                         op_name = op.name
-                        #op = tf.debugging.is_nan(tf.reduce_mean(op))
+                        # op = tf.debugging.is_nan(tf.reduce_mean(op))
                         print_ops.append(tf.print(op.name, op, output_stream=sys.stdout))
 
                     print_op = tf.group(*print_ops)
@@ -75,6 +110,7 @@ class Model(InitFromParams):
                 output_spec = tf.estimator.EstimatorSpec(mode, export_outputs=output_dict.get("export_outputs", None),
                                                          predictions=output_dict.get('predictions', None))
             else:
-                raise ValueError("Mode %s are not supported."%mode)
+                raise ValueError("Mode %s are not supported." % mode)
             return output_spec
+
         return model_fn

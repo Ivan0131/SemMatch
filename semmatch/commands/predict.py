@@ -83,7 +83,7 @@ class Predict(Command):
                     probs = output_vals['output']
                     num_batch = probs.shape[0]
                     #######################
-                    predictions = np.argmax(probs, axis=1)
+                    predictions = probs #np.argmax(probs, axis=1)
                     #predictions = (probs <= 0.5).astype(np.int32)
                     total_num += num_batch
                     logger.info("processing %s/%s" % (num_batch, total_num))

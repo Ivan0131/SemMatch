@@ -273,15 +273,8 @@ class BIMPM(Model):
                                             kernel_initializer=tf.random_uniform_initializer(-0.005, 0.005),
                                             bias_initializer=tf.constant_initializer(value=0.0, dtype=tf.float32))
             x = tf.layers.dropout(x, self._dropout_rate, training=is_training)
-            logits = tf.layers.dense(x, self._num_classes,
-                                            activation=tf.tanh,
-                                            kernel_initializer=tf.random_uniform_initializer(-0.005, 0.005),
-                                            bias_initializer=tf.constant_initializer(value=0.0, dtype=tf.float32))
 
-            predictions = tf.argmax(logits, axis=-1)
-            probs = tf.nn.softmax(logits, axis=-1)
-
-            output_dict = {'logits': logits, 'predictions': probs}
+            output_dict = self._make_output(x, params)
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
@@ -290,13 +283,13 @@ class BIMPM(Model):
                 labels_embedding = features_embedding['label/labels']
                 labels = features['label/labels']
 
-                loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_embedding, logits=logits))
+                loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
                 output_dict['loss'] = loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=predictions)
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=predictions)
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=predictions)
-                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
+                metrics['auc'] = tf.metrics.auc(labels=labels, predictions=output_dict['predictions'])
                 output_dict['metrics'] = metrics
                 # output_dict['debugs'] = [tf.shape(hypothesis_tokens), tf.shape(hypothesis_chars), tf.shape(char_h),
                 #                          tf.shape(premise_tokens), tf.shape(premise_chars), tf.shape(char_p)]
