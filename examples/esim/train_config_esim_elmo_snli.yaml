@@ -1,0 +1,46 @@
+data:
+  name: "snli" # or quora_data_reader
+  data_path: '../data/snli'
+  tmp_path: '../data/snli/elmo/'
+  batch_size: 64
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "nltk_splitter"
+      do_lower_case: 'False'
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
+
+model:
+  name: 'esim'
+  num_classes: 3
+  hidden_dim: 300
+  dropout_rate: 0.5
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'elmo'
+        config_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file: '../data/elmo/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        namespace: 'elmo_characters'
+        dropout_rate: 0.5
+      labels:
+        name: 'one_hot'
+        n_values: 3
+  optimizer:
+    name: 'adam'
+    embedding_trainable: "False"
+    learning_rate: 0.0004
+    warmup_proportion: 0.1
+run_config:
+  model_dir: './outputs/snli_elmo/'
+hparams:
+  train_steps: 500000
+  eval_steps: 156
+  early_stopping_max_steps_without_decrease: 100000
+  early_stopping_min_steps: 10000
+
+
+

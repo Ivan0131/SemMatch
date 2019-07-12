@@ -1,0 +1,13 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  max_length: 48
+  batch_size: 128
+  tmp_path: "../data/quora/glove_limit"
+
+num_classes: 2
+export_dir: 'outputs/mvlstm_glove_quora/export/best_exporter/1558677226'
+output_file: "eval_report.xlsx"
+
+
+

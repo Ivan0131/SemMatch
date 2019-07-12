@@ -53,22 +53,26 @@ class Evaluate(Command):
         # prediction = list(outputs.values())[0]
         # example_name = input_names[0]
         ##############
-        graph = tf.get_default_graph()
-        outputs['query_embedding'] = graph.get_tensor_by_name("esim/concat:0")
-        outputs['title_embedding'] = graph.get_tensor_by_name("esim/concat_1:0")
-        outputs['query_lstm_1'] = graph.get_tensor_by_name("esim/concat_2:0")
-        outputs['title_lstm_1'] = graph.get_tensor_by_name("esim/concat_3:0")
-        outputs['query_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul:0')
-        outputs['title_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul_1:0')
-        outputs['query_lstm_2'] = graph.get_tensor_by_name("esim/concat_6:0")
-        outputs['title_lstm_2'] = graph.get_tensor_by_name("esim/concat_7:0")
+        # graph = tf.get_default_graph()
+        # outputs['query_embedding'] = graph.get_tensor_by_name("esim/concat:0")
+        # outputs['title_embedding'] = graph.get_tensor_by_name("esim/concat_1:0")
+        # outputs['query_lstm_1'] = graph.get_tensor_by_name("esim/concat_2:0")
+        # outputs['title_lstm_1'] = graph.get_tensor_by_name("esim/concat_3:0")
+        # outputs['query_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul:0')
+        # outputs['title_attention'] = graph.get_tensor_by_name('esim/bi_uni_attention/MatMul_1:0')
+        # outputs['query_lstm_2'] = graph.get_tensor_by_name("esim/concat_6:0")
+        # outputs['title_lstm_2'] = graph.get_tensor_by_name("esim/concat_7:0")
+        # outputs['fc1'] = graph.get_tensor_by_name("esim/concat_8:0")
+        # outputs['fc2'] = graph.get_tensor_by_name('esim/fc1/Tanh:0')
+        # outputs['logits'] = graph.get_tensor_by_name('esim/logits/BiasAdd:0')
         ###############
         #predict_fn = tf.contrib.predictor.from_saved_model(export_dir)
 
         #####xlsx wirte######
-        wb = Workbook(write_only=True)
-        ws = wb.create_sheet('examples')
-        ws.append(['question', 'answer', 'true_label', 'predict', 'score'])
+        tsv_file = open(output_file, 'w')
+        #wb = Workbook(write_only=True)
+        #ws = wb.create_sheet('examples')
+        #ws.append(['question', 'answer', 'true_label', 'predict', 'score'])
 
 
         y_true = []
@@ -123,12 +127,15 @@ class Evaluate(Command):
                         true_label = true_label_val[i]
                         predict = predictions[i]
                         prob = probs[i]
-                        #ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob)])
-                        ws.append([premise_str, hypothesis_str, str(true_label), str(predict), str(prob),
-                                   json.dumps(output_vals['query_embedding'][i].tolist()), json.dumps(output_vals['title_embedding'][i].tolist()),
-                                   json.dumps(output_vals['query_lstm_1'][i].tolist()), json.dumps(output_vals['title_lstm_1'][i].tolist()),
-                                   json.dumps(output_vals['query_attention'][i].tolist()), json.dumps(output_vals['title_attention'][i].tolist()),
-                                   json.dumps(output_vals['query_lstm_2'][i].tolist()), json.dumps(output_vals['title_lstm_2'][i].tolist())])
+                        tsv_str = "\t".join([premise_str, hypothesis_str, str(true_label), str(predict), str(prob)])
+                        # tsv_str = "\t".join([premise_str, hypothesis_str, str(true_label), str(predict), str(prob),
+                        #            json.dumps(output_vals['query_embedding'][i].tolist()), json.dumps(output_vals['title_embedding'][i].tolist()),
+                        #            json.dumps(output_vals['query_lstm_1'][i].tolist()), json.dumps(output_vals['title_lstm_1'][i].tolist()),
+                        #            json.dumps(output_vals['query_attention'][i].tolist()), json.dumps(output_vals['title_attention'][i].tolist()),
+                        #            json.dumps(output_vals['query_lstm_2'][i].tolist()), json.dumps(output_vals['title_lstm_2'][i].tolist()),
+                        #            json.dumps(output_vals['fc1'][i].tolist()), json.dumps(output_vals['fc2'][i].tolist())
+                        #                      ])
+                        tsv_file.write(tsv_str+"\n")
                     #print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
                 except tf.errors.OutOfRangeError as e:
                     #logger.warning(e)
@@ -156,24 +163,24 @@ class Evaluate(Command):
 
                     print(confmx_str)
                     print("accuracy: %s, precise: %s, recall: %s, f1-score: %s" % (accuracy, precise, recall, f1score))
-                    ws = wb.create_sheet(title='metrics')
-                    legend = ["label \ predict "]
-                    for i in range(num_classes):
-                        legend.append(str(i))
-                    ws.append(legend)
-                    for i in range(num_classes):
-                        row = [str(i)]
-                        for j in range(num_classes):
-                            row.append(str(confusion_matrix[i][j]))
-                        ws.append(row)
-                    ws.append([])
-                    ws.append([])
-                    ws.append(['accuracy', 'precise', 'recall', 'f1-score'])
-                    ws.append([str(accuracy), str(precise), str(recall), str(f1score)])
-                    if output_file:
-                        if not output_file.endswith(".xlsx"):
-                            output_file += '.xlsx'
-                        wb.save(output_file)
+                    # legend = ["label \ predict "]
+                    # for i in range(num_classes):
+                    #     legend.append(str(i))
+                    # ws.append(legend)
+                    # for i in range(num_classes):
+                    #     row = [str(i)]
+                    #     for j in range(num_classes):
+                    #         row.append(str(confusion_matrix[i][j]))
+                    #     ws.append(row)
+                    # ws.append([])
+                    # ws.append([])
+                    # ws.append(['accuracy', 'precise', 'recall', 'f1-score'])
+                    # ws.append([str(accuracy), str(precise), str(recall), str(f1score)])
+                    # if output_file:
+                    #     if not output_file.endswith(".xlsx"):
+                    #         output_file += '.xlsx'
+                    #     wb.save(output_file)
+                    tsv_file.close()
                     break
 
     @classmethod

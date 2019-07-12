@@ -8,7 +8,7 @@ data:
 model:
   name: 'mvlstm'
   num_classes: 2
-  sim_func: 'bilinear'
+  sim_func: 'cosine'
   embedding_mapping:
     name: 'base'
     encoders:
@@ -17,7 +17,7 @@ model:
         embedding_dim: 300
         trainable: "False"
         pretrained_file: "../data/glove.840B.300d.txt"
-        tmp_dir: "./outputs/mvlstm_glove_quora_bilinear/embedding"
+        tmp_dir: "./outputs/mvlstm_glove_quora/embedding"
         namespace: 'tokens'
         dropout_rate: 0.5
       labels:
@@ -28,7 +28,7 @@ model:
     name: 'adagrad'
     learning_rate: 0.03
 run_config:
-  model_dir: './outputs/mvlstm_glove_quora_bilinear/'
+  model_dir: './outputs/mvlstm_glove_quora/'
 hparams:
   eval_steps: 316
   early_stopping_max_steps_without_decrease: 200000

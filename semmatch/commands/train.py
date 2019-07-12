@@ -76,6 +76,7 @@ class Train(Command):
         if self._valid_input_fn:
             self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
                                                      exporters=exporters)
+        self._estimator.evaluate(self._valid_input_fn, steps=hparams.eval_steps, name=DataSplit.TEST)
         tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
         # print(eval_results)
         # eval_results = [eval_result[0] for eval_result in eval_results]

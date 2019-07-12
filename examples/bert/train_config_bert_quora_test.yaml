@@ -1,0 +1,55 @@
+data:
+  name: "quora" # or quora_data_reader
+  data_path: '../data/quora'
+  tmp_path: '../data/quora/bert/'
+  batch_size: 8
+  vocab_init_files:
+    tokens: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+  emb_pretrained_files:
+    tokens: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+  only_include_pretrained_words: 'True'
+  token_indexers:
+    tokens:
+      name: "single_id"
+      start_tokens: ['[CLS]']
+      end_tokens: ['[SEP]']
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "bert_wordpiece_splitter"
+      vocab_file: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+
+model:
+  name: 'bert_classifier_test'
+  num_classes: 2
+  embedding_mapping:
+    name: 'base'
+    encoders:
+      tokens:
+        name: 'bert'
+        remove_bos_eos: 'False'
+        config_file: '../data/uncased_L-24_H-1024_A-16/bert_config.json'
+        vocab_file: '../data/uncased_L-24_H-1024_A-16/vocab.txt'
+        ckpt_to_initialize_from: '../data/uncased_L-24_H-1024_A-16/bert_model.ckpt'
+        namespace: 'tokens'
+      labels:
+        name: 'one_hot'
+        n_values: 2
+  optimizer:
+    name: 'adam'
+    embedding_trainable: "True"
+    learning_rate: 1e-5
+    warmup_proportion: 0.1
+    weight_decay_rate: 0.01
+    exclude_from_weight_decay: ["LayerNorm", "layer_norm", "bias"]
+run_config:
+  model_dir: './outputs/bert_quora_test/'
+  save_checkpoints_steps: 4000
+hparams:
+  train_steps: 1000000
+  eval_steps: 5054
+  early_stopping_max_steps_without_decrease: 200000
+  early_stopping_min_steps: 20000
+
+
+

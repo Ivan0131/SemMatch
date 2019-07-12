@@ -1,0 +1,20 @@
+data:
+  name: "snli" # or quora_data_reader
+  data_path: '../data/snli'
+  tmp_path: '../data/snli/elmo/'
+  batch_size: 64
+  tokenizer:
+    name: "word_tokenizer"
+    word_splitter:
+      name: "nltk_splitter"
+      do_lower_case: 'False'
+  token_indexers:
+    elmo_indexer:
+      name: 'elmo_characters'
+
+num_classes: 3
+export_dir: 'outputs/snli_elmo/export/best_exporter/1559102556'
+output_file: "eval_report.xlsx"
+
+
+

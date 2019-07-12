@@ -1,37 +1,35 @@
 data:
-  name: "datarliving" # or quora_data_reader
+  name: "datarliving"
   data_path: '../data/datarliving'
-  batch_size: 32
+  batch_size: 160
   tmp_path: "../data/datarliving/glove_tokens"
 
 model:
-  name: 'bilstm'
+  name: 'drmm'
   num_classes: 2
-  dropout_rate: 0.0
-  hidden_dim: 200
   embedding_mapping:
     name: 'base'
     encoders:
       tokens:
         name: 'embedding'
-        embedding_dim: 200
+        embedding_dim: 300
         trainable: "False"
-        pretrained_file: "../data/datarliving_200.txt"
-        tmp_dir: "./outputs/mcan_glove_datarliving/embedding"
+        pretrained_file: "../data/glove.840B.300d.txt"
+        tmp_dir: "./outputs/drmm_glove_datarlving/embedding"
         namespace: 'tokens'
-        dropout_rate: 0.0
+        dropout_rate: 0.5
       labels:
         name: 'one_hot'
         n_values: 2
         namespace: 'labels'
   optimizer:
-    name: 'adam'
-    learning_rate: 0.0003
+    name: 'adagrad'
+    learning_rate: 0.03
 run_config:
-  model_dir: './outputs/mcan_glove_datarliving/'
+  model_dir: './outputs/drmm_glove_datarlving/'
 hparams:
-  loss_type: 'rank'
-  eval_steps: 80
+  task: 'rank'
+  eval_steps: 316
   early_stopping_max_steps_without_decrease: 200000
   early_stopping_min_steps: 20000
 
