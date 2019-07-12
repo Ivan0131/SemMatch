@@ -4,13 +4,6 @@ from semmatch.utils.logger import logger
 from tensorflow.python.estimator import model_fn
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.framework import tensor_shape, dtypes
-from tensorflow.python.ops import variables
-from tensorflow.python.platform import tf_logging
-from tensorflow.python.saved_model import constants
-from tensorflow.python.saved_model import utils_impl as saved_model_utils
-from tensorflow.python.training import saver as tf_saver
-from tensorflow.python.saved_model.loader_impl import _parse_saved_model, _get_asset_tensors, _get_main_op_tensor
-from tensorflow.python.util import compat
 
 
 def generate_input_map(signature_def, features, labels=None):

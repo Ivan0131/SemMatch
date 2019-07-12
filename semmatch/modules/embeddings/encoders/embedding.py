@@ -125,8 +125,9 @@ def _read_pretrained_embeddings(pretrained_file, tmp_dir, embedding_dim, vocab, 
         else:
             logger.error("Do not support this embedding file type.")
             return None
-        with gzip.open(cache_embedding_file, 'wb') as pkl_file:
-            pickle.dump(embeddings, pkl_file)
+        if cache_embedding_file:
+            with gzip.open(cache_embedding_file, 'wb') as pkl_file:
+                pickle.dump(embeddings, pkl_file)
     return embeddings
 
 

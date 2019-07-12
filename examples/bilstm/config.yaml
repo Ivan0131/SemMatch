@@ -1,12 +1,14 @@
 data:
   name: "quora" # or quora_data_reader
-  data_path: './data/quora'
+  data_path: '../data/quora'
   train_filename: 'train.tsv'
   valid_filename: 'dev.tsv'
   batch_size: 320
+  tmp_path: "../data/quora/glove_new"
+
 
 model:
-  name: 'text_matching_bilstm'
+  name: 'bilstm'
   num_classes: 2
   hidden_dim: 300
   dropout_rate: 0.5

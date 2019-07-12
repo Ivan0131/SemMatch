@@ -44,7 +44,7 @@ class Train(Command):
             config=run_config, params=hparams, warm_start_from=model.get_warm_start_setting())
 
         train_hooks = []
-        if tf_version[1] >= 10:
+        if tf_version[1] >= 10 and tf_version[1] <= 13:
             early_stopping = tf.contrib.estimator.stop_if_no_decrease_hook(
                 self._estimator,
                 metric_name='loss',
