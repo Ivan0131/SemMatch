@@ -6,5 +6,7 @@ openpyxl
 tqdm
 pyyaml
 simplejson
-bs4
-tensorflow==1.12
+Beautifulsoup4
+nltk
+scikit-learn
+tensorflow==1.14

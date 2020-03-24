@@ -40,5 +40,5 @@ class LabelField(Field):
 
     def get_tf_shapes_and_dtypes(self):
         shapes_and_dtypes = dict()
-        shapes_and_dtypes[self._label_namespace] = {'dtype': tf.int32, 'shape': (None)}
+        shapes_and_dtypes[self._label_namespace] = {'dtype': tf.int32, 'shape': (None, )}
         return shapes_and_dtypes

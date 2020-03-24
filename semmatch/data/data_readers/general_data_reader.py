@@ -49,6 +49,13 @@ class GeneralDataReader(data_reader.DataReader):
                         for (field_tar, field_src) in self._field_mapping.items():
                             example[field_tar] = fields[field_src]
                         yield self._process(example)
+
+                        example = {}
+                        example['premise'] = fields['answer']
+                        example['hypothesis'] = fields['question']
+                        example['label'] = fields['label']
+                        yield self._process(example)
+
             if file_path.lower().endswith("csv"):
                 if self._field_mapping is None:
                     raise ConfigureError("field mapping is not provided for csv file.")
@@ -60,6 +67,7 @@ class GeneralDataReader(data_reader.DataReader):
                         for (field_tar, field_src) in self._field_mapping.items():
                             example[field_tar] = fields[int(field_src)]
                         yield self._process(example)
+
         else:
             return None
 

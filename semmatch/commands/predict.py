@@ -55,7 +55,7 @@ class Predict(Command):
         # ws = wb.create_sheet('examples')
         # ws.append(['index', 'question', 'answer', 'predict', 'score'])
         csv_file = open(output_file, 'w', encoding="utf-8")
-        csv_file.write("\t".join(["index", "prediction"]) + "\n")
+        csv_file.write("\t".join(["index", 'premise', 'hypothesis',  "prediction"]) + "\n")
         #csv_file.write("\t".join(["index", "premise", "hypothesis", "prediction", "prob"])+"\n")
         total_num = 0
         #accuracy = 0
@@ -83,7 +83,7 @@ class Predict(Command):
                     probs = output_vals['output']
                     num_batch = probs.shape[0]
                     #######################
-                    predictions = probs #np.argmax(probs, axis=1)
+                    predictions = np.argmax(probs, axis=1)
                     #predictions = (probs <= 0.5).astype(np.int32)
                     total_num += num_batch
                     logger.info("processing %s/%s" % (num_batch, total_num))
@@ -105,8 +105,9 @@ class Predict(Command):
                         prob = probs[i]
                         index = indexs[i]
                         #csv_str = "\t".join([index, premise_str, hypothesis_str, str(predict), str(prob)])+"\n"
-                        csv_str = "\t".join([index, str(predict)]) + "\n"
-                        csv_file.write(csv_str)
+                        if hypothesis_str.strip() != "" and premise_str.strip() != "" and hypothesis_str.strip() != premise_str.strip():
+                            csv_str = "\t".join([index, premise_str, hypothesis_str, str(predict)]) + "\n"
+                            csv_file.write(csv_str)
                         #ws.append([index, premise_str, hypothesis_str, str(predict), str(prob)])
                     #print("process %s/%s correct/total instances with accuracy %s." % (accuracy, total_num, accuracy/float(total_num)))
                 except tf.errors.OutOfRangeError as e:
