@@ -6,17 +6,21 @@ from semmatch.utils.exception import ConfigureError, ModelError
 from semmatch.config.init_from_params import InitFromParams
 from semmatch.modules.optimizers import Optimizer, AdamOptimizer
 from semmatch.modules.embeddings import EmbeddingMapping
-from semmatch.nn.loss import rank_hinge_loss
+from semmatch.utils.saved_model import get_assignment_map_from_checkpoint
+from semmatch.nn.loss import rank_hinge_loss, focal_loss, multilabel_categorical_crossentropy, \
+    multilabel_categorical_crossentropy_topk, GHM_Loss, GHM_Loss2
 from tensorflow.python import debug as tf_debug
 
 
 @register.register("model")
 class Model(InitFromParams):
-    def __init__(self, embedding_mapping: EmbeddingMapping, optimizer: Optimizer = AdamOptimizer(),
+    def __init__(self, embedding_mapping: EmbeddingMapping, optimizer: Optimizer = AdamOptimizer(), init_checkpoint=None,
                  model_name: str = "model"):
         self._model_name = model_name
         self._optimizer = optimizer
         self._embedding_mapping = embedding_mapping
+        self._init_checkpoint = init_checkpoint
+        self._bool_init_checkpoint = False
 
     def get_warm_start_setting(self):
         return self._embedding_mapping.get_warm_start_setting()
@@ -26,11 +30,24 @@ class Model(InitFromParams):
 
     def _make_output(self, inputs, params):
         task = params.get('task', 'classification')
+        task_type = params.get('task_type', 'multiclass')
+
         if task == 'classification':
             logits = tf.contrib.layers.fully_connected(inputs, self._num_classes, activation_fn=None, scope='logits')
-
-            predictions = tf.cast(tf.argmax(logits, -1), tf.int32)
-            output_score = tf.nn.softmax(logits, -1)
+            if task_type == 'multiclass':
+                predictions = tf.cast(tf.argmax(logits, -1), tf.int32)
+                output_score = tf.nn.softmax(logits, -1)
+            elif task_type == 'multilabel':
+                threshold = params.get('threshold', 0.5)
+                output_score = tf.sigmoid(logits)
+                predictions = tf.cast(tf.greater(output_score, threshold), tf.int32)
+            elif task_type == 'topk':
+                output_score = logits #tf.nn.softmax(logits, -1)
+                predictions = tf.cast(tf.greater(logits, 0), tf.int32) #tf.cast(tf.argmax(logits, -1), tf.int32) #
+               # predictions = tf.one_hot(predictions, depth=self._num_classes, axis=-1, dtype=tf.int32)
+            else:
+                raise ConfigureError("Task type %s is not support for task %s. "
+                                     "Only multiclass and multilabel is support for task %s" % (task_type, task, task))
         elif task == 'rank':
             logits = tf.contrib.layers.fully_connected(inputs, 1, activation_fn=None, scope='logits')
             predictions = logits
@@ -41,15 +58,29 @@ class Model(InitFromParams):
 
         output_dict = {'logits': logits, 'predictions': predictions}
         output_score = tf.estimator.export.PredictOutput(output_score)
+        output_predictions = tf.estimator.export.PredictOutput(predictions)
         export_outputs = {"output_score": output_score}
         output_dict['export_outputs'] = export_outputs
         return output_dict
 
     def _make_loss(self, logits, labels, params):
         task = params.get('task', 'classification')
+        task_type = params.get('task_type', 'multiclass')
         if task == 'classification':
-            loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits))
+            if task_type == 'multiclass':
+                #loss = GHM_Loss().ghm_class_loss(logits=logits, targets=labels)
+                loss = focal_loss(logits=logits, labels=labels)
+                # loss = tf.reduce_mean(
+                #     tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits))
+            elif task_type == 'multilabel':
+                loss = tf.reduce_mean(
+                    tf.nn.sigmoid_cross_entropy_with_logits(labels=labels, logits=logits))
+            elif task_type == 'topk':
+                loss = multilabel_categorical_crossentropy(labels=labels, logits=logits)
+            else:
+                raise ConfigureError("Task type %s is not support for task %s. "
+                                     "Only multiclass and multilabel is support for task %s" % (task_type, task, task))
+
         elif task == 'rank':
             loss = rank_hinge_loss(labels=labels, logits=logits, params=params)
         else:
@@ -64,7 +95,24 @@ class Model(InitFromParams):
                 tf.logging.info("name = %s, shape = %s, data_split = %s" % (name, features[name].shape, mode))
 
             output_dict = self.forward(features, labels, mode, params)
+            ########################################################################################
+            if not self._bool_init_checkpoint:
+                initialized_variable_names = {}
+                tvars = tf.trainable_variables()
+                if self._init_checkpoint:
+                    (assignment_map, initialized_variable_names
+                     ) = get_assignment_map_from_checkpoint(tvars,  self._init_checkpoint)
 
+                    tf.train.init_from_checkpoint( self._init_checkpoint, assignment_map)
+                tf.logging.info("**** Trainable Variables ****")
+                for var in tvars:
+                    init_string = ""
+                    if var.name in initialized_variable_names:
+                        init_string = ", *INIT_FROM_CKPT*"
+                    tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
+                                    init_string)
+                self._bool_init_checkpoint = True
+            ########################################################################################
             if mode == tf.estimator.ModeKeys.TRAIN:
                 if 'loss' not in output_dict:
                     raise ModelError("Please provide loss in the model outputs for %s dataset." % mode)

@@ -27,7 +27,7 @@ class NumericalField(Field):
 
     def get_padded_shapes(self):
         padded_shapes = dict()
-        padded_shapes[self._numerical_namespace] = [0]
+        padded_shapes[self._numerical_namespace] = []
         return padded_shapes
 
     def get_padding_values(self):

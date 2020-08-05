@@ -39,6 +39,11 @@ class Train(Command):
             raise ConfigureError("Please provide model for training.")
         self._model_fn = model.make_estimator_model_fn()
 
+        if hparams.per_process_gpu_memory_fraction is not None and 0 < hparams.per_process_gpu_memory_fraction <= 1:
+            session_config = tf.ConfigProto(log_device_placement=True, allow_soft_placement=True)
+            session_config.gpu_options.per_process_gpu_memory_fraction = hparams.per_process_gpu_memory_fraction
+            run_config = run_config.replace(session_config=session_config)
+
         self._estimator = tf.estimator.Estimator(
             model_fn=self._model_fn,
             config=run_config, params=hparams, warm_start_from=model.get_warm_start_setting())
@@ -51,6 +56,8 @@ class Train(Command):
                 max_steps_without_decrease=hparams.early_stopping_max_steps_without_decrease,
                 min_steps=hparams.early_stopping_min_steps)
             train_hooks.append(early_stopping)
+
+
 
         exporters = None
         if self._serving_feature_spec:
@@ -75,8 +82,8 @@ class Train(Command):
                                                   max_steps=hparams.train_steps, hooks=train_hooks)
         if self._valid_input_fn:
             self._valid_spec = tf.estimator.EvalSpec(input_fn=self._valid_input_fn, steps=hparams.eval_steps,
-                                                     exporters=exporters)
-        self._estimator.evaluate(self._valid_input_fn, steps=hparams.eval_steps, name=DataSplit.TEST)
+                                                     exporters=exporters, throttle_secs=hparams.throttle_secs)
+        #self._estimator.evaluate(self._valid_input_fn, steps=hparams.eval_steps, name=DataSplit.TEST)
         tf.estimator.train_and_evaluate(self._estimator, self._train_spec, self._valid_spec)
         # print(eval_results)
         # eval_results = [eval_result[0] for eval_result in eval_results]

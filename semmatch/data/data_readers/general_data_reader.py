@@ -4,7 +4,7 @@ import zipfile
 import tensorflow as tf
 from semmatch.data.data_readers import data_reader
 from semmatch.data import data_utils
-from semmatch.data.fields import Field, TextField, LabelField
+from semmatch.data.fields import Field, TextField, LabelField, MultiLabelField
 from semmatch.data.tokenizers import WordTokenizer, Tokenizer
 from semmatch.data import Instance
 from semmatch.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
@@ -19,7 +19,7 @@ class GeneralDataReader(data_reader.DataReader):
     def __init__(self, data_name: str = "general", data_path: str = None, tmp_path: str = None, batch_size: int = 32,
                  train_filename: str = None, valid_filename: str = None, test_filename: str = None,
                  field_mapping: Dict = None,
-                 concat_sequence: bool = False,
+                 concat_sequence: bool = False, num_label = None,
                  max_length: int = None, tokenizer: Tokenizer = WordTokenizer(),
                  vocab_init_files: Dict[str, str] = None,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False,
@@ -33,6 +33,7 @@ class GeneralDataReader(data_reader.DataReader):
         self._tokenizer = tokenizer
         self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer(namespace='tokens')}
         self._field_mapping = field_mapping
+        self._num_label = num_label
 
     def _read(self, mode: str):
         filename = self.get_filename_by_mode(mode)
@@ -50,17 +51,17 @@ class GeneralDataReader(data_reader.DataReader):
                             example[field_tar] = fields[field_src]
                         yield self._process(example)
 
-                        example = {}
-                        example['premise'] = fields['answer']
-                        example['hypothesis'] = fields['question']
-                        example['label'] = fields['label']
-                        yield self._process(example)
+                        # example = {}
+                        # example['premise'] = fields['answer']
+                        # example['hypothesis'] = fields['question']
+                        # example['label'] = fields['label']
+                        # yield self._process(example)
 
-            if file_path.lower().endswith("csv"):
+            if file_path.lower().endswith("tsv"):
                 if self._field_mapping is None:
-                    raise ConfigureError("field mapping is not provided for csv file.")
+                    raise ConfigureError("field mapping is not provided for tsv file.")
                 with open(file_path, 'r') as csv_file:
-                    logger.info("Reading instances from csv dataset at: %s", file_path)
+                    logger.info("Reading instances from tsv dataset at: %s", file_path)
                     for line in csv_file:
                         fields = line.strip().split("\t")
                         example = {}
@@ -72,13 +73,22 @@ class GeneralDataReader(data_reader.DataReader):
             return None
 
     def _process(self, example):
+        #example['label'] = example['label'][0]
         fields: Dict[str, Field] = {}
-        tokenized_premise = self._tokenizer.tokenize(example['premise'])
-        tokenized_hypothesis = self._tokenizer.tokenize(example['hypothesis'])
-        fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)
-        fields["hypothesis"] = TextField(tokenized_hypothesis, self._token_indexers, max_length=self._max_length)
+        if 'premise' in example:
+            tokenized_premise = self._tokenizer.tokenize(example['premise'])
+            fields["premise"] = TextField(tokenized_premise, self._token_indexers, max_length=self._max_length)
+
+        if 'hypothesis' in example:
+            tokenized_hypothesis = self._tokenizer.tokenize(example['hypothesis'])
+            fields["hypothesis"] = TextField(tokenized_hypothesis, self._token_indexers, max_length=self._max_length)
         if 'label' in example:
-            fields['label'] = LabelField(example['label'])
+            if isinstance(example['label'], list):
+                if self._num_label is None:
+                    raise ConfigureError("the number of labels is not provided for multi-label classification.")
+                fields['label'] = MultiLabelField(example['label'], num_label=self._num_label)
+            else:
+                fields['label'] = LabelField(example['label'])
         return Instance(fields)
 
 

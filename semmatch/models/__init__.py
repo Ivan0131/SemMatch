@@ -13,3 +13,5 @@ from semmatch.models.mvlstm import MVLSTM
 from semmatch.models.drmm import DRMM
 from semmatch.models.duet import Duet
 from semmatch.models.bert_classifier_test import BertClassifierTest
+
+from semmatch.models.classification import BiLSTM_CLS, SAN_CLS

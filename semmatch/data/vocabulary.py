@@ -86,14 +86,20 @@ class Vocabulary(object):
                 vocab_namespace = load_from_txt(vocab_path)
                 if not namespace_match(DEFAULT_NON_PADDED_NAMESPACES, namespace):
                     if namespace_match(DEFAULT_NON_UNK_NAMESPACES, namespace):
-                        if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
-                            vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
+                        #if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
+                        if DEFAULT_PADDING_TOKEN in vocab_namespace:
+                            vocab_namespace.remove(DEFAULT_PADDING_TOKEN)
+                        vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
                         vocab_namespace = vocab_namespace[:1] + list(set(vocab_namespace[1:]))
                     else:
-                        if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
-                            vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
-                        if vocab_namespace[1] != DEFAULT_OOV_TOKEN:
-                            vocab_namespace.insert(1, DEFAULT_OOV_TOKEN)
+                        #if vocab_namespace[0] != DEFAULT_PADDING_TOKEN:
+                        if DEFAULT_PADDING_TOKEN in vocab_namespace:
+                            vocab_namespace.remove(DEFAULT_PADDING_TOKEN)
+                        vocab_namespace.insert(0, DEFAULT_PADDING_TOKEN)
+                        if DEFAULT_OOV_TOKEN in vocab_namespace:
+                            vocab_namespace.remove(DEFAULT_OOV_TOKEN)
+                        #if vocab_namespace[1] != DEFAULT_OOV_TOKEN:
+                        vocab_namespace.insert(1, DEFAULT_OOV_TOKEN)
                         vocab_namespace = vocab_namespace[:2] + list(set(vocab_namespace[2:]))
                 else:
                     vocab_namespace = list(set(vocab_namespace))

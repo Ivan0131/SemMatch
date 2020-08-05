@@ -13,8 +13,8 @@ from semmatch import nn
 @register.register_subclass('model', 'bert_classifier')
 class BertClassifier(Model):
     def __init__(self, embedding_mapping: EmbeddingMapping, num_classes, optimizer: Optimizer=AdamOptimizer(),
-                 dropout_rate: float = 0.1, initializer_range: float = 0.02, model_name: str = 'bert_classifier'):
-        super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, model_name=model_name)
+                 dropout_rate: float = 0.1, initializer_range: float = 0.02, init_checkpoint=None, model_name: str = 'bert_classifier'):
+        super().__init__(embedding_mapping=embedding_mapping, optimizer=optimizer, init_checkpoint=init_checkpoint, model_name=model_name)
         self._embedding_mapping = embedding_mapping
         self._num_classes = num_classes
         self._dropout_rate = dropout_rate
@@ -26,14 +26,14 @@ class BertClassifier(Model):
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
             premise_tokens_ids = features.get('premise/tokens', None)
-            hypothesis_tokens_ids = features.get('hypothesis/tokens', None)
+            #hypothesis_tokens_ids = features.get('hypothesis/tokens', None)
 
             if premise_tokens_ids is None:
                 raise ConfigureError("The input features should contain premise with vocabulary namespace tokens "
                                      "or elmo_characters.")
-            if hypothesis_tokens_ids is None:
-                raise ConfigureError("The input features should contain hypothesis with vocabulary namespace tokens "
-                                     "or elmo_characters.")
+            # if hypothesis_tokens_ids is None:
+            #     raise ConfigureError("The input features should contain hypothesis with vocabulary namespace tokens "
+            #                          "or elmo_characters.")
 
             premise_tokens = features_embedding.get('premise/tokens', None)
 
@@ -54,7 +54,6 @@ class BertClassifier(Model):
                 output_layer = tf.nn.dropout(output_layer, keep_prob=0.9)
 
             output_dict = self._make_output(output_layer, params)
-
 
             if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL:
                 if 'label/labels' not in features:
