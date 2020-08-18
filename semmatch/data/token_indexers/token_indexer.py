@@ -20,6 +20,9 @@ class TokenIndexer(InitFromParams):
     def to_example(self, token_indexers):
         raise NotImplementedError
 
+    def to_raw_data(self, token_indexers):
+        raise NotImplementedError
+
     def count_vocab_items(self, token: Token, counter: Dict[str, Dict[str, int]]):
         """
         The :class:`Vocabulary` needs to assign indices to whatever strings we see in the training

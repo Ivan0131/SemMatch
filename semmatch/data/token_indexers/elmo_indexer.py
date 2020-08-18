@@ -134,6 +134,17 @@ class ELMoTokenCharactersIndexer(TokenIndexer):
             for i in range(len(token_indexers))]
         return tf.train.FeatureList(feature=input_features)
 
+    def to_raw_data(self, token_indexers):
+        if self._max_length:
+            token_indexers = self.pad_token_sequence(token_indexers, self._max_length)
+        if len(token_indexers) == 0:
+            token_indexers = np.array([[self.get_padding_values()] * ELMoCharacterMapper.max_word_length],
+                                      dtype=np.int64)
+        input_features = [
+           token_indexers[i]
+            for i in range(len(token_indexers))]
+        return input_features
+
     def get_example(self):
         return tf.FixedLenSequenceFeature([ELMoCharacterMapper.max_word_length], tf.int64, allow_missing=True)
 

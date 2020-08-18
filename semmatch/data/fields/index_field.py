@@ -20,6 +20,12 @@ class IndexField(Field):
             features[self._index_namespace] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[bytes(self._index_id, 'utf-8')]))
             return features
 
+    def to_raw_data(self):
+        if self._index_id is not None:
+            features = dict()
+            features[self._index_namespace] = [self._index_id]
+            return features
+
     def get_example(self):
         features = dict()
         features[self._index_namespace] = tf.FixedLenFeature([], tf.string)

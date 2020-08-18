@@ -57,6 +57,12 @@ class FieldIndexer(TokenIndexer):
         feature_list = [tf.train.Feature(int64_list=tf.train.Int64List(value=[token])) for token in token_indexers]
         return tf.train.FeatureList(feature=feature_list)
 
+    def to_raw_data(self, token_indexers):
+        if self._max_length:
+            token_indexers = self.pad_token_sequence(token_indexers, self._max_length)
+        feature_list = [[token] for token in token_indexers]
+        return feature_list
+
     def get_example(self):
         return tf.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
 

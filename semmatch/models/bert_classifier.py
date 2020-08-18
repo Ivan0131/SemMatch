@@ -65,9 +65,9 @@ class BertClassifier(Model):
                 loss = self._make_loss(labels=labels_embedding, logits=output_dict['logits'], params=params)
                 output_dict['loss'] = loss
                 metrics = dict()
-                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions'])
-                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions'])
-                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions'])
+                metrics['accuracy'] = tf.metrics.accuracy(labels=labels, predictions=output_dict['predictions']['predictions'])
+                metrics['precision'] = tf.metrics.precision(labels=labels, predictions=output_dict['predictions']['predictions'])
+                metrics['recall'] = tf.metrics.recall(labels=labels, predictions=output_dict['predictions']['predictions'])
                # metrics['auc'] = tf.metrics.auc(labels=labels, predictions=predictions)
 
                 output_dict['metrics'] = metrics

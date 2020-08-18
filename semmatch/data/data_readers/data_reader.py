@@ -36,10 +36,10 @@ class DataSplit(object):
 @register.register('data')
 class DataReader(InitFromParams):
     def __init__(self, data_path: str = None, tmp_path: str = None, data_name: str = None, batch_size: int = 32,
-                 train_filename: str = None, valid_filename: str = None, test_filename: str = None,
+                 train_filename: str = None, valid_filename: str = None, test_filename: str = None, num_label: int = None,
                  predict_filename: str = None, max_length: int = None,
                  vocab_init_files: Dict[str, str] = None, concat_sequence: bool = False,
-                 num_retrieval: int = None,
+                 num_retrieval: int = None, generate_tfrecord: bool = True, resample: bool = False,
                  emb_pretrained_files: Dict[str, str] = None, only_include_pretrained_words: bool = False) -> None:
         self._data_name = data_name or "data"
         if data_path is None:
@@ -62,6 +62,9 @@ class DataReader(InitFromParams):
         self._vocab_init_files = vocab_init_files
         self._concat_sequence = concat_sequence
         self._num_retrieval = num_retrieval
+        self._generate_tfrecord = generate_tfrecord
+        self._num_label = num_label
+        self._resample = resample
 
     def get_data_name(self):
         return self._data_name
@@ -127,7 +130,8 @@ class DataReader(InitFromParams):
     def make_estimator_input_fn(self, mode, force_repeat=False):
         if self._vocab is None:
             self._vocab = self.get_or_create_vocab()
-        self.generate(self._vocab, mode)
+        if self._generate_tfrecord:
+            self.generate(self._vocab, mode)
         features = self.get_features(mode)
         padded_shapes, padding_values = self.get_padded_shapes_and_values(mode)
         print(padded_shapes, padding_values)
@@ -142,16 +146,51 @@ class DataReader(InitFromParams):
         else:
             return None
 
+    def resample_data_reject(self, dataset):
+        def class_func(parsed_features):
+            # tf.where(tf.not_equal(tf.cast(parsed_features['label/labels'], tf.float32), tf.constant(0, dtype=tf.float32)))[:, 0]
+            # tf.where(tf.not_equal(parsed_features['label/labels'], zero))
+            if parsed_features['label/labels'].get_shape()[0] == 1:
+                return parsed_features['label/labels'][0]
+            else:
+                return tf.argmax(parsed_features['label/labels'])
+
+        resampler = tf.data.experimental.rejection_resample(
+            class_func, target_dist=[1.0 / self._num_label for i in range(self._num_label)])
+        dataset = dataset.apply(resampler).map(lambda extra_label, features_and_label: features_and_label)
+        return dataset
+
+    def resample_data_sample(self, dataset):
+        def filter_class_func(parsed_features):
+            # tf.where(tf.not_equal(tf.cast(parsed_features['label/labels'], tf.float32), tf.constant(0, dtype=tf.float32)))[:, 0]
+            # tf.where(tf.not_equal(parsed_features['label/labels'], zero))
+            if parsed_features['label/labels'].get_shape()[0] == 1:
+                return parsed_features['label/labels'][0] == filter_label
+            else:
+                return tf.argmax(parsed_features['label/labels']) == filter_label
+
+        dataset_classes = []
+        for filter_label in range(self._num_label):
+            dataset_class = dataset.filter(filter_class_func)
+            dataset_classes.append(dataset_class)
+        dataset = tf.data.experimental.sample_from_datasets(dataset_classes, [1.0 / self._num_label for i in range(self._num_label)])
+
+        return dataset
+
     def input_fn(self, features, padded_shapes, padding_values, mode, params, config, force_repeat=False):
         is_training = mode == tf.estimator.ModeKeys.TRAIN
-        num_threads = cpu_count() if is_training else 1
+        num_threads = cpu_count() - 1 if is_training else 1
         batch_size = self._batch_size
         dataset = self.dataset(features, mode, params, num_threads=num_threads)
+
         if force_repeat or is_training:
             dataset = dataset.repeat()
             print("dataset repeat")
+
         dataset = dataset.map(
             cast_ints_to_int32, num_parallel_calls=num_threads)
+        # if self._resample and is_training:
+        #     dataset = self.resample_data_sample(dataset)
         #dataset = dataset.batch(batch_size)
         dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
         dataset = dataset.prefetch(2)
@@ -181,27 +220,36 @@ class DataReader(InitFromParams):
         shuffle_files = shuffle_files or shuffle_files is None and is_training
         if params.get('task', 'classification') == 'rank':
             shuffle_files = False
-        filenames = self._get_output_file_paths(mode)
-        if is_training:
-            dataset = tf.data.Dataset.from_tensor_slices(tf.constant(filenames))
-            if shuffle_files:
-                dataset.shuffle(buffer_size=len(filenames))
-            #dataset.repeat()
-            cycle_length = min(num_threads, len(filenames))
-            # dataset = dataset.apply(
-            #     tf.data.experimental.parallel_interleave(
-            #         tf.data.TFRecordDataset,
-            #         sloppy=is_training,
-            #         cycle_length=cycle_length))
+        if self._generate_tfrecord:
+            filenames = self._get_output_file_paths(mode)
+            if is_training:
+                dataset = tf.data.Dataset.from_tensor_slices(tf.constant(filenames))
+                if shuffle_files:
+                    dataset.shuffle(buffer_size=len(filenames))
+                #dataset.repeat()
+                cycle_length = min(num_threads, len(filenames))
+                # dataset = dataset.apply(
+                #     tf.data.experimental.parallel_interleave(
+                #         tf.data.TFRecordDataset,
+                #         sloppy=is_training,
+                #         cycle_length=cycle_length))
 
-            dataset = dataset.interleave(tf.data.TFRecordDataset, cycle_length=cycle_length)
-            dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+                dataset = dataset.interleave(tf.data.TFRecordDataset, cycle_length=cycle_length)
+                dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+            else:
+                dataset = tf.data.TFRecordDataset(filenames)
+                if shuffle_files:
+                    dataset = dataset.shuffle(shuffle_buffer_size)
+            dataset = dataset.map(lambda record: _parse_function(record, features), num_parallel_calls=num_threads)
         else:
-            dataset = tf.data.TFRecordDataset(filenames)
-            #dataset.repeat()
-            if shuffle_files:
-                dataset = dataset.shuffle(shuffle_buffer_size)
-        dataset = dataset.map(lambda record: _parse_function(record, features), num_parallel_calls=num_threads)
+            dataset_dict = collections.defaultdict(list)
+            for instance in tqdm.tqdm(self.read(mode)):
+                instance.index_fields(self._vocab)
+                raw_data = instance.to_raw_data()
+                for key in raw_data:
+                    dataset_dict[key].append(raw_data[key])
+                print(raw_data)
+
         if output_buffer_size:
             dataset = dataset.prefetch(output_buffer_size)
         return dataset

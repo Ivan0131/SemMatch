@@ -47,6 +47,8 @@ class Bert(Encoder):
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
         for (feature_key, feature) in features.items():
+            if '/' not in feature_key:
+                continue
             feature_key_fields = feature_key.split("/")
             feature_namespace = feature_key_fields[1].strip()
             field_name = feature_key_fields[0].strip()
@@ -93,7 +95,8 @@ class Bert(Encoder):
         ckpt_vars = tf.train.list_variables(self._ckpt_to_initialize_from)
         ckpt_vars = [v[0] for v in ckpt_vars]
 
-        embedding_vars_mapping = dict([(os.path.join("embedding/"+self._vocab_namespace, v), v) for v in ckpt_vars if not v.startswith('cls')])
+        embedding_vars_mapping = dict([(os.path.join("embedding/"+self._vocab_namespace, v), v) for v in ckpt_vars if not v.startswith('cls')
+                                       and 'adam' not in v and 'global_step' not in v])
         if self._new_vocab_file:
             vocab_info = tf.estimator.VocabInfo(
                 new_vocab=self._new_vocab_file,

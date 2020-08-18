@@ -11,6 +11,9 @@ class Field(object):
     def to_example(self):
         raise NotImplementedError
 
+    def to_raw_data(self):
+        raise NotImplementedError
+
     def get_example(self):
         raise NotImplementedError
 

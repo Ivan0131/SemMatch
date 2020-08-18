@@ -40,6 +40,8 @@ class Embedding(Encoder):
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
         for (feature_key, feature) in features.items():
+            if '/' not in feature_key:
+                continue
             feature_namespace = feature_key.split("/")[1].strip()
             if feature_namespace == self._vocab_namespace:
                 with tf.variable_scope("embedding/"+self._vocab_namespace, reuse=tf.AUTO_REUSE):

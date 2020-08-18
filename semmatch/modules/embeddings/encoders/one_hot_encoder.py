@@ -17,6 +17,8 @@ class OneHotEncoder(Encoder):
     def forward(self, features, labels, mode, params):
         outputs = dict()
         for (feature_key, feature) in features.items():
+            if '/' not in feature_key:
+                continue
             feature_namespace = feature_key.split("/")[1].strip()
             if feature_namespace == self._vocab_namespace:
                 with tf.variable_scope(self._encoder_name):

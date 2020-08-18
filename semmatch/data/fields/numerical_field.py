@@ -20,6 +20,12 @@ class NumericalField(Field):
             features[self._numerical_namespace] = tf.train.Feature(float_list=tf.train.FloatList(value=[self._value]))
             return features
 
+    def to_raw_data(self):
+        if self._value is not None:
+            features = dict()
+            features[self._numerical_namespace] = [self._value]
+            return features
+
     def get_example(self):
         features = dict()
         features[self._numerical_namespace] = tf.FixedLenFeature([], tf.float32)

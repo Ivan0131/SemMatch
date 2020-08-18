@@ -218,3 +218,23 @@ class BertWordpieceSplitter(WordSplitter):
             else:
                 output_tokens.extend(sub_tokens)
         return [Token(word) for word in output_tokens]
+
+
+@register.register_subclass("word_splitter", "bert_full_splitter")
+class BertFullSplitter(WordSplitter):
+    def __init__(self, vocab_file, unk_token=DEFAULT_OOV_TOKEN, max_input_chars_per_word=200, do_lower_case=True):
+        super().__init__(do_lower_case=do_lower_case)
+        self.basic_tokenizer = BertBasicSplitter(do_lower_case=do_lower_case)
+        self.wordpiece_tokenizer = BertWordpieceSplitter(vocab_file=vocab_file, unk_token=unk_token,
+                                                         max_input_chars_per_word=max_input_chars_per_word,
+                                                         do_lower_case=do_lower_case)
+
+    def split_words(self, text):
+        split_tokens = []
+        for token in self.basic_tokenizer.split_words(text):
+            for sub_token in self.wordpiece_tokenizer.split_words(token.text):
+                split_tokens.append(sub_token)
+
+        return split_tokens
+
+

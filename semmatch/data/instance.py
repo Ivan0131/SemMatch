@@ -28,6 +28,19 @@ class Instance(Mapping[str, field.Field]):
         for field in self.fields.values():
             field.count_vocab(counter)
 
+    def to_raw_data(self):
+        instance_features = {}
+        for field_name, field in self.fields.items():
+            field_features = field.to_raw_data()
+            if not field_features:
+                raise ValueError("%s index is not generated" % (field_name,))
+            if isinstance(field_features, Dict):
+                for (feature_name, feature) in field_features.items():
+                    instance_features[field_name + "/" + feature_name] = feature
+            else:
+                raise ValueError("The field %s to example is error." % (field_name,))
+        return instance_features
+
     def to_example(self):
         """Helper: build tf.Example from (string -> int/float/str list) dictionary."""
         instance_features = {}

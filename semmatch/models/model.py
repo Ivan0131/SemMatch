@@ -56,7 +56,7 @@ class Model(InitFromParams):
             raise ConfigureError(
                 "Task %s is not support. Only task and classification tasks are supported" % task)
 
-        output_dict = {'logits': logits, 'predictions': predictions}
+        output_dict = {'logits': logits, 'predictions': {'predictions': predictions, 'output_score': output_score}}
         output_score = tf.estimator.export.PredictOutput(output_score)
         output_predictions = tf.estimator.export.PredictOutput(predictions)
         export_outputs = {"output_score": output_score}

@@ -46,6 +46,8 @@ class ELMo(Encoder):
         is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
         for (feature_key, feature) in features.items():
+            if '/' not in feature_key:
+                continue
             feature_key_fields = feature_key.split("/")
             feature_namespace = feature_key_fields[1].strip()
             #field_name = feature_key_fields[0].strip()

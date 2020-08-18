@@ -108,7 +108,8 @@ class Evaluate(Command):
                     elif task_type == 'multilabel':
                         threshold = hparams.get('threshold', 0.5)
                         predictions_val = (probs > threshold).astype(dtype=np.int32)
-
+                    elif task_type == 'topk':
+                        predictions_val = (probs > 0).astype(dtype=np.int32)
                     else:
                         raise ConfigureError("Task type %s is not support for task %s. "
                                              "Only multiclass and multilabel is support for task %s" % (
@@ -132,7 +133,7 @@ class Evaluate(Command):
                         hypothesis_str = vocab.convert_indexes_to_tokens(hypothesis_tokens_val[i], 'tokens')
                         hypothesis_str = " ".join(hypothesis_str)
 
-                        if task_type == 'multilabel':
+                        if task_type == 'multilabel' or task_type == 'topk':
                             predictions = [[] for i in range(num_batch)]
                             for (row, col) in np.argwhere(predictions_val == 1):
                                 predictions[row].append(col)
@@ -151,7 +152,7 @@ class Evaluate(Command):
                             tsv_str = "\t".join(
                                 [premise_str, hypothesis_str, vocab.get_index_token(true_label, namespace='labels'),
                                  vocab.get_index_token(predict, namespace='labels'), str(prob)])
-                        elif task_type == 'multilabel':
+                        elif task_type == 'multilabel' or task_type == 'topk':
                             tsv_str = "\t".join([premise_str, hypothesis_str, " ".join(
                                 [vocab.get_index_token(l, namespace='labels') for l in true_label]), " ".join(
                                 [vocab.get_index_token(p, namespace='labels') for p in predict]), str(prob)])
@@ -199,7 +200,7 @@ class Evaluate(Command):
 
                 print(confmx_str)
 
-            elif task_type == 'multilabel':
+            elif task_type == 'multilabel' or task_type == 'topk':
                 confusion_matrix = metrics.multilabel_confusion_matrix(y_true, y_pred)
                 print("metrics:")
                 for k in range(num_classes):

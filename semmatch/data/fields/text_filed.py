@@ -34,6 +34,15 @@ class TextField(Field):
             features[namespace] = feature
         return features
 
+    def to_raw_data(self):
+        if self._indexed_tokens is None:
+            return
+        features = {}
+        for (namespace, token_indexer) in self._token_indexers.items():
+            feature = token_indexer.to_raw_data(self._indexed_tokens[namespace])
+            features[namespace] = feature
+        return features
+
     def get_example(self):
         features = {}
         for (namespace, token_indexer) in self._token_indexers.items():

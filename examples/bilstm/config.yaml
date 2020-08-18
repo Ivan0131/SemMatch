@@ -31,8 +31,9 @@ model:
 run_config:
   model_dir: './outputs'
 hparams:
-  train_steps: 1000000
+  train_steps: 10000
   eval_steps: 100
+
 
 
 

@@ -75,6 +75,12 @@ class SingleIdTokenIndexer(TokenIndexer):
             tokens.append(padding_token)
         return tokens
 
+    def to_raw_data(self, token_indexers):
+        if self._max_length:
+            token_indexers = self.pad_token_sequence(token_indexers, self._max_length)
+        feature_list = [[token] for token in token_indexers]
+        return feature_list
+
     def to_example(self, token_indexers):
         if self._max_length:
             token_indexers = self.pad_token_sequence(token_indexers, self._max_length)
