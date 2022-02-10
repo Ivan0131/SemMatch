@@ -9,4 +9,4 @@ simplejson
 Beautifulsoup4
 nltk
 scikit-learn
-tensorflow==1.14
+tensorflow==2.5.3
